@@ -8,7 +8,7 @@ OPTIONS='nogui'
 WORLD='minecraft-world'
 MCPATH='/minecraft/server'
 BACKUPPATH='/minecraft/backup/'
-MAXHEAP=3072
+MAXHEAP=4096
 MINHEAP=1024
 HISTORY=1024
 CPU_COUNT=3
@@ -16,7 +16,7 @@ RCON_PORT=25566
 RCON_PASSWD=rcon-passwd
 INVOCATION="java -Xmx${MAXHEAP}M -Xms${MINHEAP}M -XX:+UseConcMarkSweepGC \
 -XX:+CMSIncrementalPacing -XX:ParallelGCThreads=$CPU_COUNT -XX:+AggressiveOpts \
--jar $SERVICE $OPTIONS" 
+-jar $SERVICE $OPTIONS"
 
 get_property() {
     res=$(grep "$1" $MCPATH/server.properties)
@@ -38,6 +38,24 @@ set_property() {
 
 as_rcon() {
     rcon-client -t 127.0.0.1:$RCON_PORT -p $RCON_PASSWD $@
+}
+
+cron_init() {
+  # Execute cleaning everyday
+  if [ "$DOCLEANING" == "true" ]; then
+    cp /usr/local/minecraft/cleaning.sh /etc/cron.daily/cleaning.sh
+  fi
+
+  # Backup minecraft world every week
+  if [ "$DOBACKUP" == "true" ]; then
+    cp /usr/local/minecraft/backup.sh /etc/cron.weekly/backup.sh
+  fi
+
+  # Run cron if needed
+  if [ "$DOCLEANING" == "true" ] || [ "$DOBACKUP" == "true" ]; then
+    echo "Init crontab"
+    cron
+  fi
 }
 
 mc_start() {
@@ -94,6 +112,11 @@ mc_stop() {
   else
     echo "$SERVICE was not running."
   fi
+
+  # Backup before container stop (if enable)
+  if [ "$DOBACKUP" == "true" ]; then
+    mc_backup
+  fi
 }
 
 mc_backup() {
@@ -101,7 +124,7 @@ mc_backup() {
 
    NOW=`date "+%Y-%m-%d_%Hh%M"`
    BACKUP_FILE="$BACKUPPATH/${WORLD}_${NOW}.tar"
-   
+
    echo "Backing up minecraft configuration..."
    tar -C "$MCPATH" -cf "$BACKUP_FILE" server.properties
 
@@ -116,7 +139,7 @@ mc_backup() {
    mc_saveon
 
    echo "Compressing backup..."
-   gzip -f "$BACKUP_FILE"
+   bzip2 -f "$BACKUP_FILE"
    echo "Done."
 }
 
@@ -176,6 +199,9 @@ trap 'mc_stop && exit 0' SIGTERM
 #Start-Stop here
 case "$1" in
   start)
+    # Start cron for cleaning and backup (if enable)
+    cron_init
+    # Start minecraft server
     mc_start
     ;;
   stop)
