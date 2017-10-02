@@ -23,6 +23,8 @@ If you want to run a durable instance, you can use some options (environment var
 If you set this variable, it will automatically save your minecraft world and clean the older minecraft logfiles, and backup files.
   - *DOBACKUP*=true
 If this variable is set to true, your minecraft world will be automatically backup every week.
+  - *DOSTOPBACKUP*=true
+If this variable is set to true, your minecraft world will be automatically backup if the container stop.
 
 # How to build
 ## Using the makefile (For latest release or snapshot only)
@@ -34,6 +36,14 @@ To build the latest snapshot of minecraft:
 ```bash
 $ make latest-snapshot
 ```
+To clean all minecraft running container and minecraft images:
+```bash
+$ make clean
+```
+You have also an help:
+```bash
+$ make help
+```
 ## Using docker build (for any version of minecraft)
 Example to build the snapshot 1.12-pre6 of minecraft:
 ```bash
@@ -42,12 +52,26 @@ $ docker build --build-arg MINECRAFT_VERSION=1.12-pre6 -t gnial/minecraft-vanill
 
 # How to run
 
-To start an instance, you can do :
+To customize your instance, you can specifie some parameter (environment variables) like :
+  - *MAXPLAYERS*=number max of simultaneous players
+
+To start an instance:
 ```bash
 $ docker run -d -p 25565:25565 -v directory-to-myserver-config:/minecraft/server -v directory-to-store-backups:/minecraft/backup --name minecraft-vanilla overware/minecraft-vanilla:latest
 ```
 
-To stop it, if you have enable backup, let the container enough time to do it before stopping :
+If you already have a backup of your world, the container will automatically take the last backup from your backup folder and use it as your minecraft world.
+
+To stop it, if you have enable stop backup, let the container enough time to do it before stopping:
 ```bash
 docker stop -t 60 minecraft-vanilla
+```
+
+If you want to backup your world when your container is stopped:
+```bash
+$ docker run -ti --rm -v directory-to-myserver-config:/minecraft/server -v directory-to-store-backups:/minecraft/backup overware/minecraft-vanilla:latest backup
+```
+Otherwise, if the container is running:
+```bash
+$ docker exec -ti minecraft-vanilla backup
 ```

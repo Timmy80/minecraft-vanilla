@@ -5,17 +5,16 @@ jarfile=$(cd /minecraft && files=(minecraft_server*.jar) && echo "${files[0]}")
 SERVICE="/minecraft/$jarfile"
 SCREENNAME='minecraft'
 OPTIONS='nogui'
-WORLD='minecraft-world'
+WORLD=`cat /minecraft/server/server.properties 2> /dev/null | grep level-name | cut -d= -f2 || echo world`
 MCPATH='/minecraft/server'
-BACKUPPATH='/minecraft/backup/'
-MAXHEAP=4096
-MINHEAP=1024
-HISTORY=1024
+BACKUPPATH='/minecraft/backup'
+MAXHEAP=6144
+MINHEAP=2048
 CPU_COUNT=3
 RCON_PORT=25566
 RCON_PASSWD=rcon-passwd
-INVOCATION="java -Xmx${MAXHEAP}M -Xms${MINHEAP}M -XX:+UseConcMarkSweepGC \
--XX:+CMSIncrementalPacing -XX:ParallelGCThreads=$CPU_COUNT -XX:+AggressiveOpts \
+INVOCATION="java -Xmx${MAXHEAP}M -Xms${MINHEAP}M \
+-XX:ParallelGCThreads=$CPU_COUNT -XX:+AggressiveOpts \
 -jar $SERVICE $OPTIONS"
 
 get_property() {
@@ -32,7 +31,7 @@ set_property() {
     if [ -z "$res"]; then
         echo "$1=$2" >> $MCPATH/server.properties
     else
-        sed -i.bak "s/$res/$1=$2/g" $MCPATH/server.properties
+        sed -i "s/$res/$1=$2/g" $MCPATH/server.properties
     fi
 }
 
@@ -63,14 +62,37 @@ mc_start() {
   then
     echo "$SERVICE is already running!"
   else
+    if ! [ -f /minecraft/server/eula.txt ]; then
+      # First time the server start - Look into backup for a Map
+      LAST_WORLD=`basename $(ls $BACKUPPATH/*.tar.gz | sort | tail -1)`
+      if [ -n "$LAST_WORLD" ]; then
+        NAME=`echo -e "$LAST_WORLD" | cut -f1 -d.`
+        WORLD=`echo -e "$NAME" | cut -f1 -d_`
+        WORLD_DATE=`echo -e "$NAME" | cut -f2-3 -d_`
+
+        echo -e "Importing world $WORLD [ $WORLD_DATE ]"
+        tar zxf $BACKUPPATH/$LAST_WORLD -C /tmp/
+        mv /tmp/$WORLD /minecraft/server/
+        rm -rf /tmp/*.jar
+      fi
+    fi
+
     echo "Starting $SERVICE..."
     cd $MCPATH
     $INVOCATION &
     wait $!
 
     #accept eula and restart if necessary
-    if [ -n "$(tail logs/latest.log | grep "EULA")" ]; then
-        sed -i.bak s/eula=false/eula=true/g eula.txt
+    if [ -n "$(tail logs/latest.log | grep EULA)" ]; then
+        sed -i s/eula=false/eula=true/g eula.txt
+        if [ -n "$MAXPLAYERS" ]; then
+          set_property max-players "$MAXPLAYERS"
+        fi
+
+        if [ "$WORLD" != "world" ]; then
+          set_property level-name "$WORLD"
+        fi
+
         $INVOCATION &
         wait $!
     fi
@@ -114,7 +136,7 @@ mc_stop() {
   fi
 
   # Backup before container stop (if enable)
-  if [ "$DOBACKUP" == "true" ]; then
+  if [ "$DOSTOPBACKUP" == "true" ]; then
     mc_backup
   fi
 }
@@ -139,7 +161,7 @@ mc_backup() {
    mc_saveon
 
    echo "Compressing backup..."
-   bzip2 -f "$BACKUP_FILE"
+   gzip -f "$BACKUP_FILE"
    echo "Done."
 }
 
@@ -167,8 +189,9 @@ if [ -f $MCPATH/server.properties ]; then
 
     RCON_PASSWD=$(get_property rcon.password)
     if [ -z "$RCON_PASSWD" ]; then
-        echo "adding rcon.password value rcon-passwd"
-        set_property rcon.password rcon-passwd
+        RCON_PASSWD=`date +%s | sha256sum | base64 | head -c 32`
+        echo "adding rcon.password value $RCON_PASSWD"
+        set_property rcon.password "$RCON_PASSWD"
     fi
 
     RCON_BROADCAST=$(get_property broadcast-rcon-to-ops)
@@ -214,8 +237,24 @@ case "$1" in
     if pgrep -f $SERVICE > /dev/null
     then
       echo "$SERVICE is running."
+      exit 0
     else
       echo "$SERVICE is not running."
+      exit 1
+    fi
+    ;;
+  unpack_world)
+
+    ;;
+  rcon_password)
+    echo -e "$RCON_PASSWD"
+    exit 0
+    ;;
+  health_status)
+    if [[ $(as_rcon list) =~ "players online" ]]; then
+      exit 0
+    else
+      exit 1
     fi
     ;;
   command)
@@ -228,7 +267,7 @@ case "$1" in
     ;;
 
   *)
-  echo "Usage: $0 {start|stop|backup|status|command \"server command\"}"
+  echo "Usage: $0 {start|stop|backup|status|rcon_password|command \"server command\"}"
   exit 1
   ;;
 esac
