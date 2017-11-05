@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2.7
 
 import json
 import argparse
@@ -29,7 +29,7 @@ with open("/tmp/version_manifest.json") as json_data:
         break
 
 
-print 
+print
 if not version :
   print "requested version not found!"
   sys.exit(1)
@@ -41,6 +41,3 @@ try:
 except IOError as e:
   print "I/O Error. Download aborted "+str(e)
   sys.exit(2)
-
-
-

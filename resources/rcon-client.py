@@ -1,6 +1,6 @@
-#!/usr/bin/python
- 
-import socket 
+#!/usr/bin/python2.7
+
+import socket
 from struct import *
 import binascii
 import sys
@@ -51,7 +51,7 @@ args=parser.parse_args()
 if args.verbose :
     print "target:", args.target
     print "passwd:", args.passwd
-    print "command:", args.command 
+    print "command:", args.command
 #print args.__dict__
 
 # split target to separate address and port
@@ -99,4 +99,4 @@ answer=RconPacket.hydrate(data)
 print answer.payload
 
 
-s.close() 
+s.close()

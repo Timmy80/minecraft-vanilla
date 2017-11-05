@@ -52,8 +52,19 @@ $ docker build --build-arg MINECRAFT_VERSION=1.12-pre6 -t gnial/minecraft-vanill
 
 # How to run
 
-To customize your instance, you can specifie some parameter (environment variables) like :
-  - *MAXPLAYERS*=number max of simultaneous players
+You can change default JVM : Max Heap / Min Head, with environment variables :
+  - *MAXHEAP*=6144
+  - *MINHEAP*=2048
+
+To customize your server.properties instance, you can specify parameter by adding docker environment variable prefix by *MCCONF_*
+The property **must be** with *underscore* instead of *dash*.
+For example :
+  - *MCCONF_motd*=Name of your Minecraft server
+  - *MCCONF_max_players*=Number max of simultaneous players
+  - *MCCONF_view_distance*=Number of max chunck view distance
+  - *MCCONF_difficulty*=Difficulty level
+  - *MCCONF_level_seed*=Seed of your world
+  - *MCCONF_...*
 
 To start an instance:
 ```bash

@@ -8,8 +8,8 @@ OPTIONS='nogui'
 WORLD=`cat /minecraft/server/server.properties 2> /dev/null | grep level-name | cut -d= -f2 || echo world`
 MCPATH='/minecraft/server'
 BACKUPPATH='/minecraft/backup'
-MAXHEAP=6144
-MINHEAP=2048
+MAXHEAP=${MAXHEAP:-6144}
+MINHEAP=${MINHEAP:-2048}
 CPU_COUNT=3
 RCON_PORT=25566
 RCON_PASSWD=rcon-passwd
@@ -18,25 +18,27 @@ INVOCATION="java -Xmx${MAXHEAP}M -Xms${MINHEAP}M \
 -jar $SERVICE $OPTIONS"
 
 get_property() {
-    res=$(grep "$1" $MCPATH/server.properties)
-    if [ -z "$res" ]; then
-	return 1
-    fi
+  local res=$(grep "$1" $MCPATH/server.properties)
+  if [ -z "$res" ]; then
+    return 1
+  fi
 
-    cut -d "=" -f 2 <<< "$res"
+  cut -d "=" -f 2 <<< "$res"
 }
 
 set_property() {
-    res=$(grep "$1" $MCPATH/server.properties)
-    if [ -z "$res"]; then
-        echo "$1=$2" >> $MCPATH/server.properties
-    else
-        sed -i "s/$res/$1=$2/g" $MCPATH/server.properties
-    fi
+  local propertyName=$1
+  shift
+  local res=$(grep "$propertyName" $MCPATH/server.properties)
+  if [ -z "$res"]; then
+    echo "$propertyName=$@" >> $MCPATH/server.properties
+  else
+    sed -i "s/$res/$propertyName=$@/g" $MCPATH/server.properties
+  fi
 }
 
 as_rcon() {
-    rcon-client -t 127.0.0.1:$RCON_PORT -p $RCON_PASSWD $@
+  rcon-client -t 127.0.0.1:$RCON_PORT -p $RCON_PASSWD $@
 }
 
 cron_init() {
@@ -64,7 +66,7 @@ mc_start() {
   else
     if ! [ -f /minecraft/server/eula.txt ]; then
       # First time the server start - Look into backup for a Map
-      LAST_WORLD=`basename $(ls $BACKUPPATH/*.tar.gz | sort | tail -1)`
+      LAST_WORLD=`basename $(ls $BACKUPPATH/*.tar.gz 2> /dev/null | sort | tail -1) 2> /dev/null`
       if [ -n "$LAST_WORLD" ]; then
         NAME=`echo -e "$LAST_WORLD" | cut -f1 -d.`
         WORLD=`echo -e "$NAME" | cut -f1 -d_`
@@ -77,6 +79,16 @@ mc_start() {
       fi
     fi
 
+    # Set MC properties
+    IFS=$'\t\n'
+    for property in $(printenv | grep "^MCCONF_" | sed 's/^MCCONF_//g')
+    do
+      propertyKey=`echo -e $property | cut -d "=" -f 1 | sed 's/_/-/g' | tr '[A-Z]' '[a-z]'`
+      propertyValue=`echo -e $property | cut -d "=" -f 2`
+      set_property "$propertyKey" "$propertyValue"
+    done
+    IFS=$' \t\n'
+
     echo "Starting $SERVICE..."
     cd $MCPATH
     $INVOCATION &
@@ -85,10 +97,8 @@ mc_start() {
     #accept eula and restart if necessary
     if [ -n "$(tail logs/latest.log | grep EULA)" ]; then
         sed -i s/eula=false/eula=true/g eula.txt
-        if [ -n "$MAXPLAYERS" ]; then
-          set_property max-players "$MAXPLAYERS"
-        fi
 
+        # Change world name if it's load from backup
         if [ "$WORLD" != "world" ]; then
           set_property level-name "$WORLD"
         fi
@@ -144,8 +154,7 @@ mc_stop() {
 mc_backup() {
    mc_saveoff
 
-   NOW=`date "+%Y-%m-%d_%Hh%M"`
-   BACKUP_FILE="$BACKUPPATH/${WORLD}_${NOW}.tar"
+   local BACKUP_FILE="$BACKUPPATH/${WORLD}_$(date '+%Y-%m-%d_%Hh%M').tar"
 
    echo "Backing up minecraft configuration..."
    tar -C "$MCPATH" -cf "$BACKUP_FILE" server.properties
@@ -166,7 +175,7 @@ mc_backup() {
 }
 
 mc_command() {
-  command="$1";
+  local command="$1";
   if pgrep -f $SERVICE > /dev/null
   then
     echo "$SERVICE is running... executing command"
@@ -180,7 +189,6 @@ mc_command() {
 # RCON_PASSWD ?
 
 if [ -f $MCPATH/server.properties ]; then
-    WORLD=$(get_property level-name)
     RCON_PORT=$(get_property rcon.port)
     if [ -z "$RCON_PORT" ]; then
         echo "adding rcon.port value 25575"

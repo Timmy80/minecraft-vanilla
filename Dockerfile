@@ -13,8 +13,8 @@ COPY resources/*   /usr/local/minecraft/
 RUN apt-get update && apt-get install -y \
     procps \
     wget \
-    python \
     cron \
+ && apt-get install -y --no-install-recommends python2.7-minimal libpython2.7-minimal \
  && apt-get -y clean \
  && apt-get -y autoclean \
  && chmod +x /usr/local/minecraft/* \
