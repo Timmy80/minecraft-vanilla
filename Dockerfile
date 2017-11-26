@@ -35,6 +35,6 @@ VOLUME /minecraft/server /minecraft/backup
 ENTRYPOINT [ "minecraft" ]
 
 HEALTHCHECK --interval=5m --timeout=3s \
-  CMD /usr/local/minecraft/minecraft health_status || exit 1
+  CMD /usr/local/minecraft/minecraft.sh health_status || exit 1
 
 CMD [ "start" ]

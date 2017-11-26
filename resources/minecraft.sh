@@ -44,12 +44,14 @@ as_rcon() {
 cron_init() {
   # Execute cleaning everyday
   if [ "$DOCLEANING" == "true" ]; then
-    cp /usr/local/minecraft/cleaning.sh /etc/cron.daily/cleaning.sh
+    cp /usr/local/minecraft/cleaning.sh /etc/cron.daily/minecleaning
+    chmod +x /etc/cron.daily/minecleaning
   fi
 
   # Backup minecraft world every week
   if [ "$DOBACKUP" == "true" ]; then
-    cp /usr/local/minecraft/backup.sh /etc/cron.weekly/backup.sh
+    cp /usr/local/minecraft/backup.sh /etc/cron.weekly/minebackup
+    chmod +x /etc/cron.weekly/minebackup
   fi
 
   # Run cron if needed
