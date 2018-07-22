@@ -30,7 +30,7 @@ set_property() {
   local propertyName=$1
   shift
   local res=$(grep "$propertyName" $MCPATH/server.properties)
-  if [ -z "$res"]; then
+  if [ -z "$res" ]; then
     echo "$propertyName=$@" >> $MCPATH/server.properties
   else
     sed -i "s/$res/$propertyName=$@/g" $MCPATH/server.properties
