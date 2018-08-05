@@ -1,4 +1,4 @@
-FROM openjdk:9-jre-slim
+FROM openjdk:8-jre-slim
 
 LABEL maintainer="Anthony THOMAS (TimmY80),Jeremy HERGAULT (reneca)" \
       description="Image that runs a Minecraft Vanilla Server. This image provides basic features like: backup, gracefull start/stop, commands, ..." \
