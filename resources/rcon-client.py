@@ -58,9 +58,7 @@ if args.verbose :
 serveradress, serverport= args.target.split(':')
 
 #create the complete command using the received args
-command=""
-for arg in args.command :
-    command+=arg+' '
+command=' '.join(arg for arg in args.command)
 
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 try:
