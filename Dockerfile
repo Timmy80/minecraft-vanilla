@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
  && ln -snf /usr/local/minecraft/rcon-client.py /usr/local/bin/rcon-client \
  && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld \
  && wget -qO /tmp/version_manifest.json https://launchermeta.mojang.com/mc/game/version_manifest.json \
- && /usr/local/minecraft/downloadMinecraftServer.py -v $MINECRAFT_VERSION -t $MINECRAFT_LATEST \
+ && /usr/local/minecraft/downloadMinecraftServer.py -v "$MINECRAFT_VERSION" -t "$MINECRAFT_LATEST" \
  && cp /tmp/*.jar /minecraft/ \
  && rm -rf /tmp/*
 
