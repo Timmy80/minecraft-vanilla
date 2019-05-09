@@ -56,8 +56,10 @@ with open("/tmp/"+version+".json") as json_data:
 
 print "Start downloading server: "+jarURL
 try:
+  jarName="/tmp/minecraft_server."+version+".jar"
+  jarName=jarName.replace(" ", "_")
   jarfile=urllib.URLopener()
-  jarfile.retrieve(jarURL, "/tmp/minecraft_server."+version+".jar")
+  jarfile.retrieve(jarURL, jarName)
 except IOError as e:
   print "I/O Error. Download aborted "+str(e)
   sys.exit(2)
