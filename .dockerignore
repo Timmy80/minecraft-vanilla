@@ -4,3 +4,4 @@ README.md
 .git
 ssh
 *.tar
+docker-compose.yml

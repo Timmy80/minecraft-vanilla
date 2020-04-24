@@ -10,12 +10,10 @@ ARG MINECRAFT_LATEST=release
 # copy the ressources for this container
 COPY resources/*   /usr/local/minecraft/
 
-RUN apt-get update && apt-get install -y \
-    procps \
-    wget \
+RUN apt-get update && apt-get install -y --no-install-recommends -y \
     cron \
     ssh \
- && apt-get install -y --no-install-recommends python3 \
+    python3 \
  && apt-get -y clean \
  && apt-get -y autoclean \
  && chmod +x /usr/local/minecraft/* \
