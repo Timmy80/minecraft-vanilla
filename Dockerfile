@@ -14,17 +14,15 @@ RUN apt-get update && apt-get install -y \
     procps \
     wget \
     cron \
- && apt-get install -y --no-install-recommends python2.7-minimal libpython2.7-minimal \
+    ssh \
+ && apt-get install -y --no-install-recommends python3 \
  && apt-get -y clean \
  && apt-get -y autoclean \
  && chmod +x /usr/local/minecraft/* \
- && ln -snf /usr/local/minecraft/minecraft.sh /usr/local/bin/minecraft \
- && ln -snf /usr/local/minecraft/rcon-client.py /usr/local/bin/rcon-client \
- && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld \
- && wget -qO /tmp/version_manifest.json https://launchermeta.mojang.com/mc/game/version_manifest.json \
+ && ln -snf /usr/local/minecraft/minecraft.py /usr/local/bin/minecraft \
+ && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld /minecraft/ssh \
  && /usr/local/minecraft/downloadMinecraftServer.py -v "$MINECRAFT_VERSION" -t "$MINECRAFT_LATEST" \
- && cp /tmp/*.jar /minecraft/ \
- && rm -rf /tmp/*
+ && ln -snf /minecraft/minecraft_server*.jar /minecraft/minecraft_server.jar
 
 WORKDIR /usr/local/minecraft
 
@@ -35,6 +33,6 @@ VOLUME /minecraft/server /minecraft/backup
 ENTRYPOINT [ "minecraft" ]
 
 HEALTHCHECK --interval=5m --timeout=3s \
-  CMD /usr/local/minecraft/minecraft.sh health_status || exit 1
+  CMD /usr/local/bin/minecraft health_status || exit 1
 
-CMD [ "start" ]
+CMD [ "serve", "-v" ]
