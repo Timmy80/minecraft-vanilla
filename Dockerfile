@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends -y \
     cron \
     ssh \
     python3 \
+    python3-distutils \
  && apt-get -y clean \
  && apt-get -y autoclean \
  && chmod +x /usr/local/minecraft/* \

@@ -79,6 +79,15 @@ class MinecraftStatus(Enum):
     SAVING = 3
     UPLOADING = 4
     DOWNLOADING = 5
+    LOADING = 6
+
+def ignorelogs(tarinfo):
+    """
+    function to exclude the logs from the backups
+    """
+    if tarinfo.name.startswith("logs"):
+        return None
+    return tarinfo
 
 class MinecraftServer:
 
@@ -100,6 +109,11 @@ class MinecraftServer:
                 with self._lock:
                     self.status = MinecraftStatus.DOWNLOADING
                 self._download()
+            # if auto-download of the workdir is empty
+            if self.args.auto_download or not os.listdir(self.args.workdir):
+                with self._lock:
+                    self.status = MinecraftStatus.LOADING
+                self._load()
 
             # First lets create the eula.txt file if needed
             workPath = os.path.abspath(args.workdir)
@@ -151,10 +165,13 @@ class MinecraftServer:
             logging.info("Server is stopped")
 
     def _download(self):
+        """
+        Download the latest backup from the remote server
+        """
         urlParts = self.args.ssh_remote_url.split(":")
         userHost = urlParts[0]
         remotePath = urlParts[1]
-        sshCmd = ["ssh", "-o", "StrictHostKeyChecking=no", userHost, "ls -t {0} | head -n 1".format(remotePath)]
+        sshCmd = ["ssh", "-o", "StrictHostKeyChecking=no", userHost, "ls -t {0}/*.tar.gz | head -n 1".format(remotePath)]
         logging.info("Looking for latest backup: %s", sshCmd)
         res = subprocess.check_output(sshCmd)
         lastbackup = res.decode("utf-8").strip()
@@ -171,6 +188,20 @@ class MinecraftServer:
             logging.info("downloading the latest backup")
             res = subprocess.check_output(scpCmd)
             logging.debug("Server response: %s", res)
+
+    def _load(self):
+        """
+        Load the latest local backup to the run directory.
+        """
+        backups = os.listdir(self.args.backup_dir)
+        if not backups:
+            logging.info("No backup available localy")
+            return False
+
+        backups.sort()
+        lastbackup = backups[-1]
+        logging.info("Latest local backup is: %s", lastbackup)
+        filepath = os.path.join(self.args.backup_dir, lastbackup)
 
         logging.info("cleaning previous server working dir %s", self.args.workdir)
         for torm in [ os.path.join(self.args.workdir, f) for f in os.listdir(self.args.workdir)]:
@@ -198,7 +229,7 @@ class MinecraftServer:
         tarName = "{0}_{1}.tar".format(self.properties.getProperty("level-name"), time.strftime("%Y-%m-%d_%Hh%M", time.gmtime()))
         tarFile = os.path.join(self.args.backup_dir, tarName)
         with tarfile.open(name=tarFile, mode='w') as tar :
-            tar.add(self.args.workdir, arcname="/")
+            tar.add(self.args.workdir, arcname="/", filter=ignorelogs)
 
         try:
             # re-enable the server ability to write the map
@@ -366,13 +397,17 @@ class MinecraftWrapper(rcon.RCONServerHandler):
         else:
             logging.info("NOTICE: Automatic start disabled by configuration. Send the 'minecraft start' command to start the server.")
 
-        if self.args.auto_backup :
-            shutil.copyfile("/usr/local/minecraft/cleaning.sh", "/etc/cron.daily/minecleaning")
-            st = os.stat("/etc/cron.daily/minecleaning")
-            os.chmod("/etc/cron.daily/minecleaning", st.st_mode | stat.S_IEXEC)
-            shutil.copyfile("/usr/local/minecraft/backup.sh", "/etc/cron.weekly/minebackup")
-            st = os.stat("/etc/cron.weekly/minebackup")
-            os.chmod("/etc/cron.daily/minebackup", st.st_mode | stat.S_IEXEC)
+        if self.args.auto_clean :
+            cleanScript="/etc/cron.daily/minecleaning"
+            shutil.copyfile("/usr/local/minecraft/cleaning.sh", cleanScript)
+            st = os.stat(cleanScript)
+            os.chmod(cleanScript, st.st_mode | stat.S_IEXEC)
+        if self.args.auto_backup:
+            backupScript="/etc/cron.{frequency}/minebackup".format(frequency=self.args.backup_frequency)
+            shutil.copyfile("/usr/local/minecraft/backup.sh", backupScript)
+            st = os.stat(backupScript)
+            os.chmod(backupScript, st.st_mode | stat.S_IEXEC)
+        if self.args.auto_clean or self.args.auto_backup:
             self.cron = subprocess.Popen("cron")
 
         if not os.path.isdir("/root/.ssh"):
@@ -463,9 +498,16 @@ def getBoolEnv(env_var, default=False):
 FORMAT = '%(asctime)-15s [%(name)s][%(levelname)s]: %(message)s'
 logging.basicConfig(format=FORMAT, level="WARNING")
 
+cronFrequencies = ["daily", "hourly", "monthly", "weekly"]
+
 MC_SSH_REMOTE_URL = os.getenv("MC_SSH_REMOTE_URL", None)
 MC_MIN_HEAP = os.getenv("MC_MIN_HEAP", os.getenv("MINHEAP", "2048"))
 MC_MAX_HEAP = os.getenv("MC_MAX_HEAP", os.getenv("MAXHEAP", "6144"))
+MC_BACKUP_FREQUENCY = os.getenv("MC_BACKUP_FREQUENCY", "weekly")
+
+if not MC_BACKUP_FREQUENCY in cronFrequencies:
+    logging.FATAL("invalid backup frequency %s. Value must be one of %s", MC_BACKUP_FREQUENCY, cronFrequencies)
+    sys.exit(1)
 
 parser = argparse.ArgumentParser(description='Manage a minecraft java server')
 parser.add_argument('-v', '--verbose', action="store_true", help="Increase output verbosity")
@@ -480,7 +522,9 @@ parser.add_argument("--use-gfirst", action="store_true", help='Use the G1 Garbag
 parser.add_argument("--gc-threads", default="3", help='Number of threads allocated to be Garbage Collector')
 parser.add_argument("--rcon-port", default=25575, type=int, help='the listening port for RCON(Remote CONsole)')
 parser.add_argument("--rcon-pswd", default="rcon-passwd", help='the password for RCON(Remote CONsole)')
+parser.add_argument("--backup-frequency", default=MC_BACKUP_FREQUENCY, choices=cronFrequencies, help='the frequeny of the world backups.')
 parser.add_argument("--no-auto-start", action="store_true", help='avoid the the minecraft server to starts automaticaly.')
+parser.add_argument("--auto-clean", action="store_true", help="clean the old backups automaticaly. (acts local backup only)")
 parser.add_argument("--auto-backup", action="store_true", help='backup the map automaticaly')
 parser.add_argument("--auto-download", action="store_true", help='download the lastet backup of the map before starting')
 parser.add_argument("--auto-upload", action="store_true", help='upload the backup on a remote server')
@@ -496,6 +540,8 @@ if args.very_verbose:
 
 if not args.no_auto_start:
     args.no_auto_start=getBoolEnv("MC_NO_AUTO_START")
+if not args.auto_clean:
+    args.auto_clean=getBoolEnv("MC_AUTO_CLEAN", getBoolEnv("DOCLEANING"))
 if not args.auto_backup:
     args.auto_backup=getBoolEnv("MC_AUTO_BACKUP", getBoolEnv("DOBACKUP"))
 if not args.auto_download:
