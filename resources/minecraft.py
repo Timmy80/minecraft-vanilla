@@ -56,6 +56,23 @@ class PropertiesFile:
     def getProperty(self, property):
         return self.properties[property]
     
+    def populateProperties(self):
+        """
+        Read the properties file and read the environment to look for the properties to add to server.properties.
+        Those properties are prefixed by 'MCCONF_'.
+        This also defines the mandatory properties required to enable RON.
+        This method does not perform a write. if you want the change to be taken into account you MUST call it youself.
+        """
+        self.read()
+        self.setProperty("rcon.port", "27015")
+        self.setProperty("rcon.password", "rcon-passwd")
+        self.setProperty("broadcast-rcon-to-ops", "true")
+        self.setProperty("enable-rcon", "true")
+
+        for config in [ var for var in os.environ if var.startswith("MCCONF") ]:
+            value = os.environ.get(config)
+            self.setProperty(config[7:], value)
+    
 
 class InternalError(Exception):
     """For internal error management"""
@@ -91,13 +108,12 @@ def ignorelogs(tarinfo):
 
 class MinecraftServer:
 
-    def __init__(self, args, wrapper):
+    def __init__(self, args):
         self.thread = None
-        self.properties = PropertiesFile(os.path.join(args.workdir, "server.properties"))
+        self.args = args
+        self.properties = PropertiesFile(os.path.join(self.args.workdir, "server.properties"))
         self.status = MinecraftStatus.STOPPED
         self._lock = threading.Lock()
-        self.args = args
-        self.wrapper = wrapper
         self.jvm = None
 
     def run(self):
@@ -353,20 +369,10 @@ class MinecraftServer:
 
     def _populateProperties(self):
         """
-        Read the environment and look for the properties to add to server.properties.
-        Those properties are prefixed by 'MCCONF_'.
-        This also defines the mandatory properties for RCON.
+        Read the properties file and read the environment to look for the properties to add to server.properties.
+        Then write the configuration so the JVM will take it into account on start.
         """
-        self.properties.read()
-        self.properties.setProperty("rcon.port", "27015")
-        self.properties.setProperty("rcon.password", "rcon-passwd")
-        self.properties.setProperty("broadcast-rcon-to-ops", "true")
-        self.properties.setProperty("enable-rcon", "true")
-
-        for config in [ var for var in os.environ if var.startswith("MCCONF") ]:
-            value = os.environ.get(config)
-            self.properties.setProperty(config[7:], value)
-
+        self.properties.populateProperties()
         self.properties.write()
 
 
@@ -391,7 +397,7 @@ class MinecraftWrapper(rcon.RCONServerHandler):
     def __init__(self, args):
         self.args = args
         #self.workerThread = MinecraftWorkerThread(args)
-        self.minecraftServer = MinecraftServer(args, self)
+        self.minecraftServer = MinecraftServer(args)
         if not self.args.no_auto_start :
             self.minecraftServer.start()
         else:
@@ -467,6 +473,60 @@ class MinecraftWrapper(rcon.RCONServerHandler):
                         return json.dumps(self.fowardCommand("list"))
                     else:
                         return json.dumps({ "code" : 200, "status": self.getStatus().name})
+                elif action == "property" :
+                    key = args[2]
+                    if len(args) > 3 :
+                        # its a set request
+                        if self.minecraftServer.isRunning():
+                            return json.dumps({ "code" : 409, "status": self.getStatus().name, "error": "cannot change a property on a running server."})
+                        value=" ".join(args[3:])
+                        os.environ["MCCONF_{key}".format(key=key)] = value
+                        return json.dumps({ "code" : 200, "status": self.getStatus().name})
+                    else :
+                        # its a get request
+                        try:
+                            properties = PropertiesFile(os.path.join(self.args.workdir, "server.properties"))
+                            properties.populateProperties()
+                            return  json.dumps({ "code" : 200, "status": self.getStatus().name, "value" : properties.getProperty(key)})
+                        except:
+                            return  json.dumps({ "code" : 404, "status": self.getStatus().name, "error" : "key not available"})
+                elif action == "config":
+                    dictArgs = vars(self.args)
+                    if len(args) == 2 :
+                        return  json.dumps({ "code" : 200, "status": self.getStatus().name, "config" : dictArgs})
+                    else:
+                        key = args[2]
+                        key = key.replace("-", "_")
+                        if not key in dictArgs:
+                            return  json.dumps({ "code" : 404, "status": self.getStatus().name, "error" : "bad configuration key"})
+                        elif len(args) == 3:
+                            return  json.dumps({ "code" : 200, "status": self.getStatus().name, "value" : dictArgs[key]})
+                        else:
+                            if self.minecraftServer.isRunning():
+                                return json.dumps({ "code" : 409, "status": self.getStatus().name, "error": "cannot change a config on a running server."})
+                            value=" ".join(args[3:])
+                            # lets find the actual type of the config and set the value
+                            if isinstance(dictArgs[key], bool):
+                                dictArgs[key] = bool(distutils.util.strtobool(value))
+                            elif isinstance(dictArgs[key], int):
+                                dictArgs[key] = int(value)
+                            elif isinstance(dictArgs[key], str):
+                                dictArgs[key] = value
+                            else:
+                                return  json.dumps({ "code" : 404, "status": self.getStatus().name, "error" : "this configuration cannot be changed remotely"})
+                            return  json.dumps({ "code" : 200, "status": self.getStatus().name, "value" : dictArgs[key]})
+                    print(json.dumps(self.args))
+                    return  json.dumps({ "code" : 404, "status": self.getStatus().name, "error" : "key not available"})
+                elif action == "set-version":
+                    if self.minecraftServer.isRunning():
+                        return json.dumps({ "code" : 409, "status": self.getStatus().name, "error": "cannot change the version on a running server."})
+                    version = args[2]
+                    processResult = subprocess.run(["./downloadMinecraftServer.py", "-v", version], capture_output=True)
+                    if processResult.returncode == 0:
+                        return json.dumps({ "code" : 200, "status": self.getStatus().name, "log" : processResult.stdout.decode("utf-8")})
+                    else:
+                        error = "returncode={code}. {stderr}".format(code=processResult.returncode, stderr=processResult.stderr.decode("utf-8"))
+                        return json.dumps({ "code" : 500, "status": self.getStatus().name, "log" : processResult.stdout.decode("utf-8"), "error": error})
                 else:
                     return json.dumps({"code": 501, "error": "{0} not implemented!".format(action)})
             else:
@@ -529,7 +589,7 @@ parser.add_argument("--auto-backup", action="store_true", help='backup the map a
 parser.add_argument("--auto-download", action="store_true", help='download the lastet backup of the map before starting')
 parser.add_argument("--auto-upload", action="store_true", help='upload the backup on a remote server')
 parser.add_argument("--ssh-remote-url", default=MC_SSH_REMOTE_URL, help='the url to access the remote ssh server for backup. ex: backup@backup-instance.fr:/path/to/dir')
-parser.add_argument('action', choices=("start", "stop", "backup", "status", "health_status", "command", "serve"), help='The action to perform')
+parser.add_argument('action', choices=("start", "stop", "backup", "status", "health_status", "command", "property", "config", "set-version", "serve"), help='The action to perform')
 parser.add_argument('args', nargs='*', help='arguments of the action')
 
 args = parser.parse_args()
@@ -553,7 +613,7 @@ if not args.use_gfirst:
 
 logging.debug(args)
 action=args.action
-if action in ["start", "stop", "status", "backup", "command", "health_status"]:
+if action in ["start", "stop", "status", "backup", "command", "health_status", "property", "config", "set-version"]:
     try:
         client = rcon.RCONClient("127.0.0.1", args.rcon_port, args.rcon_pswd)
         if action == "command":
@@ -564,6 +624,8 @@ if action in ["start", "stop", "status", "backup", "command", "health_status"]:
             resp = json.loads(resp)
             if not resp["code"] == 200:
                 sys.exit(1)
+        elif action in ["property", "config", "set-version"]:
+            print(client.send("minecraft {action} {args}".format(action=action, args=" ".join(args.args))))
         else:
             print(client.send("minecraft {action}".format(action=action)))
     except:

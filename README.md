@@ -16,7 +16,14 @@ Here is a few example:
   - backup the map and the server.properties: `minecraft backup`
   - give administrator rights to a player: `minecraft command op player-name`
   - stop the server properly: `minecraft stop`
+  - get a property of the minecraft server: `minecraft property level-name`
+  - change a property of the minecraft server: `minecraft property view-distance 15`
+  - get a configuration of this wrapper: `minecraft config min-heap`
+  - change a configuration of this wrapper: `minecraft config max-heap 8192`
+  - change the version of minecraft: `minecraft set-version 20w17a`
   - ...
+
+All these commands can be sent remotely using the **RCON protocol** on the port **25575** (See [Remote management](#remote-management))
 
 ## Automating
 
@@ -42,6 +49,12 @@ t rsa -f ./id_rsa`)
 **auto-upload** feature :
   - add the option `--auto-upload` to the command line or set the env `MC_AUTO_UPLOAD=true` to enable it.
   - when **auto-upload** is configured, each time server performs a backup the file is uploaded on the remote.
+
+## Remote management
+
+This image contains a RCON server that allows you to send it commands remotely like on the RCON port of the minecraft server.  
+If your RCON command starts with `minecraft` then it will interpreted by this server like one of any command you could use inside of this image.  
+Any other command will be forwarded to the minecraft server if it's running.
 
 # How to build
 ## Using the makefile (For latest release or snapshot only)
@@ -73,14 +86,13 @@ You can change default JVM : Max Heap / Min Head, with environment variables :
   - *MC_MAX_HEAP*=6144 (*MAXHEAP* also works)
   - *MC_MIN_HEAP*=2048 (*MINHEAP* also works)
 
-To customize your server.properties instance, you can specify parameter by adding docker environment variable prefix by *MCCONF_*
-The property **must be** with *underscore* instead of *dash*.
+To customize your server.properties instance, you can specify parameter by adding docker environment variable prefix by *MCCONF_*.
 For example :
   - *MCCONF_motd*=Name of your Minecraft server
-  - *MCCONF_max_players*=Number max of simultaneous players
-  - *MCCONF_view_distance*=Number of max chunck view distance
+  - *MCCONF_max-players*=Number max of simultaneous players
+  - *MCCONF_view-distance*=Number of max chunck view distance
   - *MCCONF_difficulty*=Difficulty level
-  - *MCCONF_level_seed*=Seed of your world
+  - *MCCONF_level-seed*=Seed of your world
   - *MCCONF_...*
 
 To start an instance:

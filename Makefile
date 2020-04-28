@@ -10,7 +10,7 @@ build: ## Build last released minecraft server docker image
 	docker build -t overware/minecraft-vanilla ./
 
 latest-snapshot: ## Build last snapshot minecraft server docker image
-	docker build --build-arg MINECRAFT_LATEST=snapshot -t overware/minecraft-vanilla:snapshot ./
+	docker build --build-arg MINECRAFT_VERSION=latest-snapshot -t overware/minecraft-vanilla:snapshot ./
 
 clean: ## Remove running minecraft containers and minecraft images
 	if docker ps -a --filter ancestor=overware/minecraft-vanilla | grep -q minecraft; then docker rm -f `docker ps -a --filter ancestor=overware/minecraft-vanilla | grep minecraft | awk '{print $$NF}'`; fi
