@@ -2,12 +2,12 @@
 
 LAST_IMAGE=$(shell docker images overware/minecraft-vanilla | sort | tail -1 | awk 'BEGIN{OFS=":"}{print $$1,$$2}')
 
-.PHONY: all build latest-snapshot clean run rund
+.PHONY: all build latest-snapshot clean run rund help
 
 all: build ## Build by default released minecraft server docker image
 
 build: ## Build last released minecraft server docker image
-	docker build -t overware/minecraft-vanilla ./
+	docker build -t overware/minecraft-vanilla .
 
 latest-snapshot: ## Build last snapshot minecraft server docker image
 	docker build --build-arg MINECRAFT_VERSION=latest-snapshot -t overware/minecraft-vanilla:snapshot ./

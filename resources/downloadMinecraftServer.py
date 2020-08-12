@@ -45,6 +45,7 @@ if not version :
   sys.exit(1)
 
 print("Start downloading version metadata : {0}".format(versionURL))
+sys.stdout.flush()
 try:
   with urllib.request.urlopen(versionURL) as response:
     version_manifest=json.loads(response.read().decode('utf-8'))
@@ -55,6 +56,7 @@ except IOError as e:
 jarURL=version_manifest["downloads"]["server"]["url"]
 
 print("Start downloading server: {0}".format(jarURL))
+sys.stdout.flush()
 try:
   jarName=os.path.join(args.output_dir, 'minecraft_server.{version}.jar'.format(version=version))
   jarName=jarName.replace(" ", "_")
