@@ -560,7 +560,7 @@ logging.basicConfig(format=FORMAT, level="WARNING")
 
 cronFrequencies = ["daily", "hourly", "monthly", "weekly"]
 
-MC_SSH_REMOTE_URL = os.getenv("MC_SSH_REMOTE_URL", None)
+MC_SSH_REMOTE_URL = os.getenv("MC_SSH_REMOTE_URL", "")
 MC_MIN_HEAP = os.getenv("MC_MIN_HEAP", os.getenv("MINHEAP", "2048"))
 MC_MAX_HEAP = os.getenv("MC_MAX_HEAP", os.getenv("MAXHEAP", "6144"))
 MC_BACKUP_FREQUENCY = os.getenv("MC_BACKUP_FREQUENCY", "weekly")
