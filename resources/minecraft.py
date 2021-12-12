@@ -32,12 +32,12 @@ class PropertiesFile:
             with open(self.path, "r") as file:
                 for line in file:
                     line = line.strip()
-                    if line.startswith("#") == False : 
+                    if line.startswith("#") == False :
                         parts = line.split('=')
                         if len(parts) != 2 or parts[0] == "":
                             continue
                         self.properties[parts[0]] = parts[1]
-    
+
     def write(self):
         with open(self.path, "w") as file:
             for key in self.properties:
@@ -49,13 +49,13 @@ class PropertiesFile:
     def setProperty(self, property, value):
         if property == None or property.strip() == "":
             return False
-        
+
         self.properties[property] = value
         return True
 
     def getProperty(self, property):
         return self.properties[property]
-    
+
     def populateProperties(self):
         """
         Read the properties file and read the environment to look for the properties to add to server.properties.
@@ -72,7 +72,7 @@ class PropertiesFile:
         for config in [ var for var in os.environ if var.startswith("MCCONF") ]:
             value = os.environ.get(config)
             self.setProperty(config[7:], value)
-    
+
 
 class InternalError(Exception):
     """For internal error management"""
@@ -147,11 +147,10 @@ class MinecraftServer:
             command.append(str.format("-Xms{MINHEAP}M", MINHEAP=self.args.min_heap))
             if not self.args.use_gfirst:
                 command.append(str.format("-XX:ParallelGCThreads={CPU_COUNT}", CPU_COUNT=self.args.gc_threads)) 
-                command.append("-XX:+AggressiveOpts")
             else:
                 command.append("-XX:+UseG1GC")
-            command.append("-jar") 
-            command.append(args.jar) 
+            command.append("-jar")
+            command.append(args.jar)
             command.append(args.opt)
             logging.info(str(command))
             with self._lock:
@@ -240,7 +239,7 @@ class MinecraftServer:
             res.append(self.asRcon("save-all"))
         except:
             pass
-        
+
         self.properties.read()
         tarName = "{0}_{1}.tar".format(self.properties.getProperty("level-name"), time.strftime("%Y-%m-%d_%Hh%M", time.gmtime()))
         tarFile = os.path.join(self.args.backup_dir, tarName)
@@ -305,7 +304,7 @@ class MinecraftServer:
     def join(self):
         if self.thread is None:
             return
-        
+
         self.thread.join()
 
     def isRunning(self):
