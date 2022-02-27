@@ -1,5 +1,5 @@
 # minecraft-vanilla
-Dockerfile to run and administrate a vanilla minecraft server easily.
+Dockerfile to run and administrate a vanilla Minecraft server easily.
 
 ## Volumes
 The docker image exposes 3 volumes:
@@ -11,16 +11,16 @@ It's mandatory that you MAP the volume /minecraft/server if you want to access t
 You can also provide your own map and server configuration in this volume, the server will use it on startup.
 
 ## Commands
-This docker image allows you to administrate your minecraft server using the command `minecraft`
+This docker image allows you to administrate your Minecraft server using the command `minecraft`
 Here is a few example:
   - backup the map and the server.properties: `minecraft backup`
   - give administrator rights to a player: `minecraft command op player-name`
   - stop the server properly: `minecraft stop`
-  - get a property of the minecraft server: `minecraft property level-name`
-  - change a property of the minecraft server: `minecraft property view-distance 15`
+  - get a property of the Minecraft server: `minecraft property level-name`
+  - change a property of the Minecraft server: `minecraft property view-distance 15`
   - get a configuration of this wrapper: `minecraft config min-heap`
   - change a configuration of this wrapper: `minecraft config max-heap 8192`
-  - change the version of minecraft: `minecraft set-version 20w17a`
+  - change the version of Minecraft: `minecraft set-version 20w17a`
   - ...
 
 All these commands can be sent remotely using the **RCON protocol** on the port **25575** (See [Remote management](#remote-management))
@@ -36,7 +36,7 @@ If you want to backup your world frequently you can configure the **auto-backup*
   - when **auto-backup** is configured the map is backed-up weekly (by default) using cron. A backup is also performed each time the server is stopped.
   - if you want to change the backup frequency then add the option `--backup-frequency` to the command line or set the env **MC_BACKUP_FREQUENCY**. example: `MC_BACKUP_FREQUENCY=daily`.
 
-If you would like to run a minecraft server on temporary cloud instance instead of permanently running server you can use the **auto-dowload** and/or **auto-upload**.  
+If you would like to run a Minecraft server on temporary cloud instance instead of permanently running server you can use the **auto-dowload** and/or **auto-upload**.  
 It requires to configure the ssh-remote-url and add a ssh key to the container.
   - to configure it add the option `--ssh-remote-url` to the command line or set the env `MC_SSH_REMOTE_URL` with a value of the form `user@server:/path/to/backup/dir`
   - map a volume with and **id_rsa** and **id_rsa.pub** file on **/minecraft/ssh**. (use the following command to create the ssh key if you dont have one: `ssh-keygen -b 4096 -
@@ -52,21 +52,33 @@ t rsa -f ./id_rsa`)
 
 ## Remote management
 
-This image contains a RCON server that allows you to send it commands remotely like on the RCON port of the minecraft server.  
+This image contains a RCON server that allows you to send it commands remotely like on the RCON port of the Minecraft server.  
 If your RCON command starts with `minecraft` then it will interpreted by this server like one of any command you could use inside of this image.  
-Any other command will be forwarded to the minecraft server if it's running.
+Any other command will be forwarded to the Minecraft server if it's running.
 
 # How to build
 ## Using the makefile (For latest release or snapshot only)
-To build the latest release of minecraft:
+To build the latest release of Minecraft:
 ```bash
 $ make
 ```
-To build the latest snapshot of minecraft:
+The makefile can be use with a different repository name:
+```bash
+$ make [target] -e REPO=overware
+```
+To push the latest release of Minecraft for [multi-arch](https://docs.docker.com/desktop/multi-arch/):
+```bash
+$ make push
+```
+To build the latest snapshot of Minecraft:
 ```bash
 $ make latest-snapshot
 ```
-To clean all minecraft running container and minecraft images:
+To push the latest snapshot of Minecraft for [multi-arch](https://docs.docker.com/desktop/multi-arch/):
+```bash
+$ make push-snapshot
+```
+To clean all Minecraft running container and Minecraft images:
 ```bash
 $ make clean
 ```
@@ -74,8 +86,8 @@ You have also an help:
 ```bash
 $ make help
 ```
-## Using docker build (for any version of minecraft)
-Example to build the snapshot 1.12-pre6 of minecraft:
+## Using docker build (for any version of Minecraft)
+Example to build the snapshot 1.12-pre6 of Minecraft:
 ```bash
 $ docker build --build-arg MINECRAFT_VERSION=1.12-pre6 -t overware/minecraft-vanilla:1.12-pre6 ./
 ```
@@ -100,7 +112,7 @@ To start an instance:
 $ docker run -d -p 25565:25565 -v directory-to-myserver-config:/minecraft/server -v directory-to-store-backups:/minecraft/backup --name minecraft-vanilla overware/minecraft-vanilla:latest
 ```
 
-If you already have a backup of your world in **/minecraft/backup** and no world in **/minecraft/server**, the container will automatically take the last backup from your backup folder and use it as your minecraft world.
+If you already have a backup of your world in **/minecraft/backup** and no world in **/minecraft/server**, the container will automatically take the last backup from your backup folder and use it as your Minecraft world.
 
 To stop it, if you have enabled **auto-backup**, let the container enough time to do it before stopping:
 ```bash
@@ -134,7 +146,7 @@ services:
           #- MC_SSH_REMOTE_URL=user@server:/path/to/backup/dir
         #volumes:
         #  - "./ssh/:/minecraft/ssh/:ro"
-        command: 
+        command:
           serve -v --backup-frequency daily
 
 ```

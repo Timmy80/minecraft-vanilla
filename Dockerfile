@@ -1,4 +1,4 @@
-FROM openjdk:17-alpine
+FROM openjdk:17-slim
 
 LABEL maintainer="Anthony THOMAS (TimmY80),Jeremy HERGAULT (reneca)" \
       description="Image that runs a Minecraft Vanilla Server. This image provides basic features like: backup, gracefull start/stop, commands, ..." \
@@ -7,12 +7,14 @@ LABEL maintainer="Anthony THOMAS (TimmY80),Jeremy HERGAULT (reneca)" \
 ARG MINECRAFT_VERSION=latest-release
 
 # copy the ressources for this container
-COPY resources/*   /usr/local/minecraft/
+COPY resources/* /usr/local/minecraft/
 
-RUN apk add --update-cache \
-    openssh-client-default \
+RUN apt-get update && apt-get install -y --no-install-recommends -y \
+    cron \
+    openssh-client \
     python3 \
-    py3-distutils-extra \
+    python3-distutils \
+ && apt-get -y clean \
  && chmod +x /usr/local/minecraft/* \
  && ln -snf /usr/local/minecraft/minecraft.py /usr/local/bin/minecraft \
  && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld /minecraft/ssh \
