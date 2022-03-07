@@ -20,7 +20,7 @@ Here is a few example:
   - change a property of the Minecraft server: `minecraft property view-distance 15`
   - get a configuration of this wrapper: `minecraft config min-heap`
   - change a configuration of this wrapper: `minecraft config max-heap 8192`
-  - change the version of Minecraft: `minecraft set-version 20w17a`
+  - change the version of Minecraft: `minecraft set-version 20w17a` or with **fabric-** prefix for a fabric server `minecraft set-version fabric-1.18.2`
   - ...
 
 All these commands can be sent remotely using the **RCON protocol** on the port **25575** (See [Remote management](#remote-management))

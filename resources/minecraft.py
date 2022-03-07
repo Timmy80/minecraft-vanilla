@@ -19,8 +19,7 @@ import distutils.util
 import stat
 from enum import Enum
 from queue import Queue
-from vanillaDownloader import VanillaDownloader
-from fabricDownloader import FabricDownloader
+from mcdownloader import MCDownloader
 
 class PropertiesFile:
 
@@ -524,11 +523,7 @@ class MinecraftWrapper(rcon.RCONServerHandler):
                     version = args[2]
 
                     try:
-                        if version.startswith("fabric-") :
-                            version=version.partition("fabric-")[2]
-                            downloader=FabricDownloader(version=version)
-                        else :
-                            downloader=VanillaDownloader(version=version)
+                        downloader=MCDownloader.getInstance(version)
                         downloader.download()
                         return json.dumps({ "code" : 200, "status": self.getStatus().name})
                     except NameError as e:
