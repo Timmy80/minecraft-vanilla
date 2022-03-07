@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends -y \
  && chmod +x /usr/local/minecraft/* \
  && ln -snf /usr/local/minecraft/minecraft.py /usr/local/bin/minecraft \
  && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld /minecraft/ssh \
- && /usr/local/minecraft/downloadMinecraftServer.py -v "$MINECRAFT_VERSION"
+ && /usr/local/minecraft/vanillaDownloader.py -v "$MINECRAFT_VERSION"
 
 WORKDIR /usr/local/minecraft
 

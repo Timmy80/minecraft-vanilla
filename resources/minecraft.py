@@ -19,6 +19,8 @@ import distutils.util
 import stat
 from enum import Enum
 from queue import Queue
+from vanillaDownloader import VanillaDownloader
+from fabricDownloader import FabricDownloader
 
 class PropertiesFile:
 
@@ -520,12 +522,19 @@ class MinecraftWrapper(rcon.RCONServerHandler):
                     if self.minecraftServer.isRunning():
                         return json.dumps({ "code" : 409, "status": self.getStatus().name, "error": "cannot change the version on a running server."})
                     version = args[2]
-                    processResult = subprocess.run(["./downloadMinecraftServer.py", "-v", version], capture_output=True)
-                    if processResult.returncode == 0:
-                        return json.dumps({ "code" : 200, "status": self.getStatus().name, "log" : processResult.stdout.decode("utf-8")})
-                    else:
-                        error = "returncode={code}. {stderr}".format(code=processResult.returncode, stderr=processResult.stderr.decode("utf-8"))
-                        return json.dumps({ "code" : 500, "status": self.getStatus().name, "log" : processResult.stdout.decode("utf-8"), "error": error})
+
+                    try:
+                        if version.startswith("fabric-") :
+                            version=version.partition("fabric-")[2]
+                            downloader=FabricDownloader(version=version)
+                        else :
+                            downloader=VanillaDownloader(version=version)
+                        downloader.download()
+                        return json.dumps({ "code" : 200, "status": self.getStatus().name})
+                    except NameError as e:
+                        return json.dumps({ "code" : 500, "status": self.getStatus().name, "error": str(e)})
+                    except IOError as e:
+                        return json.dumps({ "code" : 500, "status": self.getStatus().name, "error": str(e)})
                 else:
                     return json.dumps({"code": 501, "error": "{0} not implemented!".format(action)})
             else:
