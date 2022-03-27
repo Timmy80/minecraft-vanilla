@@ -231,6 +231,12 @@ class MinecraftServer:
             tar.extractall(path=self.args.workdir)
 
     def _backup(self):
+        logging.info("cleaning old backups")
+        for filename in os.listdir(self.args.backup_dir):
+            fullpath = os.path.join(self.args.backup_dir,filename)
+            logging.info("Removing backup: %s", fullpath)
+            os.remove(fullpath)
+
         logging.info("backuping world")
         res = []
         try:
