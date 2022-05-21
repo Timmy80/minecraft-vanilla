@@ -19,6 +19,7 @@ import distutils.util
 import stat
 from enum import Enum
 from queue import Queue
+from mcdownloader import MCDownloader
 
 class PropertiesFile:
 
@@ -230,6 +231,12 @@ class MinecraftServer:
             tar.extractall(path=self.args.workdir)
 
     def _backup(self):
+        logging.info("cleaning old backups")
+        for filename in os.listdir(self.args.backup_dir):
+            fullpath = os.path.join(self.args.backup_dir,filename)
+            logging.info("Removing backup: %s", fullpath)
+            os.remove(fullpath)
+
         logging.info("backuping world")
         res = []
         try:
@@ -520,12 +527,15 @@ class MinecraftWrapper(rcon.RCONServerHandler):
                     if self.minecraftServer.isRunning():
                         return json.dumps({ "code" : 409, "status": self.getStatus().name, "error": "cannot change the version on a running server."})
                     version = args[2]
-                    processResult = subprocess.run(["./downloadMinecraftServer.py", "-v", version], capture_output=True)
-                    if processResult.returncode == 0:
-                        return json.dumps({ "code" : 200, "status": self.getStatus().name, "log" : processResult.stdout.decode("utf-8")})
-                    else:
-                        error = "returncode={code}. {stderr}".format(code=processResult.returncode, stderr=processResult.stderr.decode("utf-8"))
-                        return json.dumps({ "code" : 500, "status": self.getStatus().name, "log" : processResult.stdout.decode("utf-8"), "error": error})
+
+                    try:
+                        downloader=MCDownloader.getInstance(version)
+                        downloader.download()
+                        return json.dumps({ "code" : 200, "status": self.getStatus().name})
+                    except NameError as e:
+                        return json.dumps({ "code" : 500, "status": self.getStatus().name, "error": str(e)})
+                    except IOError as e:
+                        return json.dumps({ "code" : 500, "status": self.getStatus().name, "error": str(e)})
                 else:
                     return json.dumps({"code": 501, "error": "{0} not implemented!".format(action)})
             else:
