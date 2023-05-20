@@ -13,11 +13,11 @@ build: ## Build last released minecraft server docker image
 push: ## Build and push multi-architecture last released minecraft server docker image
 	docker buildx build --platform linux/amd64,linux/arm64/v8 -t ${REPO}/minecraft-vanilla --push .
 
-latest-snapshot: ## Build last snapshot minecraft server docker image
-	docker build --build-arg MINECRAFT_VERSION=latest-snapshot -t ${REPO}/minecraft-vanilla:snapshot ./
+latest-develop: ## Build last develop minecraft server docker image
+	docker build --build-arg MINECRAFT_VERSION=latest-snapshot -t ${REPO}/minecraft-vanilla:develop ./
 
-push-snapshot: ## Build and push multi-architecture last snapshot minecraft server docker image
-	docker buildx build --platform linux/amd64,linux/arm64/v8 -t ${REPO}/minecraft-vanilla --push .
+push-develop: ## Build and push multi-architecture last develop minecraft server docker image
+	docker buildx build --platform linux/amd64,linux/arm64/v8 -t ${REPO}/minecraft-vanilla:develop --push .
 
 clean: ## Remove running minecraft containers and minecraft images
 	if docker ps -a --filter ancestor=${REPO}/minecraft-vanilla | grep -q minecraft; then docker rm -f `docker ps -a --filter ancestor=${REPO}/minecraft-vanilla | grep minecraft | awk '{print $$NF}'`; fi

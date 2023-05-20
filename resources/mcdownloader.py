@@ -24,18 +24,27 @@ class MCDownloader:
 
     def download(self, download_dir=DOWNLOAD_DIR):
         jarName=self._download(download_dir)
-        link=os.path.join(download_dir, 'minecraft_server.jar')
+        link=self.getLink(download_dir)
         if os.path.isfile(link):
             os.unlink(link)
         os.symlink(jarName, link)
 
-    def getInstance(version):
+    @staticmethod
+    def getInstance(version: str):
         if version.startswith("fabric-") :
             version=version.partition("fabric-")[2]
-            downloader=FabricDownloader(version=version)
+            return FabricDownloader(version=version)
         else :
-            downloader=VanillaDownloader(version=version)
-        return downloader
+            return VanillaDownloader(version=version)
+    
+    @staticmethod
+    def getLink(download_dir=DOWNLOAD_DIR) -> str:
+        link=os.path.join(download_dir, 'minecraft_server.jar')
+        return link
+    
+    @staticmethod
+    def isDownloaded(download_dir=DOWNLOAD_DIR) -> bool:
+        return os.path.islink(MCDownloader.getLink(download_dir))
 
 class VanillaDownloader(MCDownloader):
     """A downloader for Fabric modded Minecraft Server"""

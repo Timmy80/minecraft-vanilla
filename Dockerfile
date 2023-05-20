@@ -4,8 +4,6 @@ LABEL maintainer="Anthony THOMAS (TimmY80),Jeremy HERGAULT (reneca)" \
       description="Image that runs a Minecraft Vanilla Server. This image provides basic features like: backup, gracefull start/stop, commands, ..." \
       github="https://github.com/Timmy80/minecraft-vanilla"
 
-ARG MINECRAFT_VERSION=latest-release
-
 # copy the ressources for this container
 COPY resources/* /usr/local/minecraft/
 
@@ -17,8 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends -y \
  && apt-get -y clean \
  && chmod +x /usr/local/minecraft/*.sh /usr/local/minecraft/*.py \
  && ln -snf /usr/local/minecraft/entry.py /usr/local/bin/minecraft \
- && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld /minecraft/ssh \
- && /usr/local/minecraft/mcdownloader.py -v "$MINECRAFT_VERSION"
+ && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld /minecraft/ssh
 
 WORKDIR /usr/local/minecraft
 

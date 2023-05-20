@@ -1,2 +1,5 @@
 ssh
 *.tar
+.vscode
+server
+__pycache__
