@@ -15,15 +15,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends -y \
     python3 \
     python3-distutils \
  && apt-get -y clean \
- && chmod +x /usr/local/minecraft/* \
- && ln -snf /usr/local/minecraft/minecraft.py /usr/local/bin/minecraft \
+ && chmod +x /usr/local/minecraft/*.sh /usr/local/minecraft/*.py \
+ && ln -snf /usr/local/minecraft/entry.py /usr/local/bin/minecraft \
  && mkdir -p /minecraft/server /minecraft/backup /minecraft/packworld /minecraft/ssh \
  && /usr/local/minecraft/mcdownloader.py -v "$MINECRAFT_VERSION"
 
 WORKDIR /usr/local/minecraft
 
 # expose the port minecraft and RCON, the volumes, set the entrypoint and set the command
-EXPOSE 25565 25575
+EXPOSE 8000 25565 25575
 VOLUME /minecraft/server /minecraft/backup
 
 ENTRYPOINT [ "minecraft" ]
@@ -31,4 +31,4 @@ ENTRYPOINT [ "minecraft" ]
 HEALTHCHECK --interval=5m --timeout=3s \
   CMD /usr/local/bin/minecraft health_status || exit 1
 
-CMD [ "serve", "-v" ]
+CMD [ "serve", "-v", "--web-port", "8000" ]

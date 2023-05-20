@@ -56,6 +56,10 @@ This image contains a RCON server that allows you to send it commands remotely l
 If your RCON command starts with `minecraft` then it will interpreted by this server like one of any command you could use inside of this image.  
 Any other command will be forwarded to the Minecraft server if it's running.
 
+If you want to manage your Minecraft server through HTTP, you can by specifying the `--web-port`.
+This option must be assign on the `minecraft serve` call.
+By default, this is enable in the Docker container on the port 8000.
+
 # How to build
 ## Using the makefile (For latest release or snapshot only)
 To build the latest release of Minecraft:
