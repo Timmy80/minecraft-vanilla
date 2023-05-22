@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends -y \
     openssh-client \
     python3 \
     python3-distutils \
+    python3-jinja2 \
  && apt-get -y clean \
  && chmod +x /usr/local/minecraft/*.sh /usr/local/minecraft/*.py \
  && ln -snf /usr/local/minecraft/entry.py /usr/local/bin/minecraft \

@@ -1,0 +1,25 @@
+<html>
+    <head>
+        <title>{{ mc.name }}</title>
+    </head>
+    <body>
+        <h2>Minecraft server [{{ mc.name }}]</h2>
+{% if mc.method == "GET" %}
+{% if mc.running %}
+        <p>The minecraft server is <span style="color:green">running</span></p>
+        <form action="/stop" method="post"><button>Stop</button></form>
+        <form action="/backup" method="post"><button>Backup</button></form>
+        <form action="/rcon" method="post"><input type="text" name="rcon" id="rcon"><button>Send RCON</button></form>
+{% else %}
+        <p>The minecraft server is <span style="color:red">stopped</span></p>
+        <form action="/start" method="post"><button>Start</button></form>
+        <form action="/backup" method="post"><button>Backup</button></form>
+{% endif %}
+{% elif mc.method == "POST" %}
+        <p>{{ mc.result }}</p>
+{% if mc.log is not none %}
+        <p>{{ mc.log }}</p>
+{% endif %}
+{% endif %}
+    </body>
+</html>

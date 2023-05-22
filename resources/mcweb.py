@@ -4,6 +4,7 @@ Minecraft web server to control the server
 
 from http.server import CGIHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs
+from jinja2 import Template
 import platform
 import logging
 from minecraft import MinecraftServer, InternalError
@@ -29,21 +30,33 @@ class MinecraftWeb(CGIHTTPRequestHandler):
         self.sys_version = ""
         self.send_error(ret_val, msg)
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_post_head()
-
-    def end_head(self):
         self.end_headers()
-        mcname = "Minecraft server [%s]" % platform.node()
-        self.wfile.write(bytes("<html><head><title>%s</title></head>" % mcname, "utf-8"))
-        self.wfile.write(bytes("<body>", "utf-8"))
-        self.wfile.write(bytes("<h2>%s</h2>" % mcname, "utf-8"))
 
-    def end_post_head(self):
+    def end_get_head(self):
         self.end_headers()
-        mcname = "Minecraft server [%s]" % platform.node()
-        self.wfile.write(bytes("<html><head><title>%s</title></head>" % mcname, "utf-8"))
-        self.wfile.write(bytes("<body>", "utf-8"))
-        self.wfile.write(bytes("<h2>%s</h2>" % mcname, "utf-8"))
+        with open('./mcindex.j2') as f:
+            rendered = Template(f.read()).render({
+                'mc': {
+                    'name': platform.node(),
+                    'method': 'GET',
+                    'running': self.minecraft_server.isRunning(),
+                }
+            })
+            self.wfile.write(bytes(rendered, "utf-8"))
+
+    def end_post_head(self, result, log):
+        self.end_headers()
+        with open('./mcindex.j2') as f:
+            rendered = Template(f.read()).render({
+                'mc': {
+                    'name': platform.node(),
+                    'method': 'POST',
+                    'running': self.minecraft_server.isRunning(),
+                    'result': result,
+                    'log': log,
+                }
+            })
+            self.wfile.write(bytes(rendered, "utf-8"))
 
     def do_HEAD(self):
         if self.minecraft_server.isRunning():
@@ -56,19 +69,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
     def do_GET(self):
         self.send_resp(200)
         self.send_header('Content-Type','text/html; charset=utf-8')
-        self.end_head()
-
-        if self.minecraft_server.isRunning():
-            self.wfile.write(bytes("<p>The minecraft server is <span style=\"color:green\">running</span></p>", "utf-8"))
-            self.wfile.write(bytes("<form action=\"/stop\" method=\"post\"><button>Stop</button></form>", "utf-8"))
-            self.wfile.write(bytes("<form action=\"/backup\" method=\"post\"><button>Backup</button></form>", "utf-8"))
-            self.wfile.write(bytes("<form action=\"/rcon\" method=\"post\"><input type=\"text\" name=\"rcon\" id=\"rcon\"><button>Send RCON</button></form>", "utf-8"))
-        else:
-            self.wfile.write(bytes("<p>The minecraft server is <span style=\"color:red\">stopped</span></p>", "utf-8"))
-            self.wfile.write(bytes("<form action=\"/start\" method=\"post\"><button>Start</button></form>", "utf-8"))
-            self.wfile.write(bytes("<form action=\"/backup\" method=\"post\"><button>Backup</button></form>", "utf-8"))
-
-        self.wfile.write(bytes("</body></html>", "utf-8"))
+        self.end_get_head()
 
     def do_POST(self):
         if self.path == "/start":
@@ -77,8 +78,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
                 self.logger.info("Start the minecraft server")
                 self.send_resp(200)
                 self.send_header('Content-Type','text/html; charset=utf-8')
-                self.end_post_head()
-                self.wfile.write(bytes("<p>The Minecraft server is starting</p>", "utf-8"))
+                self.end_post_head("The Minecraft server is starting", None)
             except InternalError as err:
                 self.logger.info("Error during the minecraft server starting: %s" % err)
                 self.send_err(500, "Error during the minecraft server starting: %s" % err)
@@ -91,10 +91,10 @@ class MinecraftWeb(CGIHTTPRequestHandler):
                 self.logger.info("Stop the minecraft server")
                 self.send_resp(200)
                 self.send_header('Content-Type','text/html; charset=utf-8')
-                self.end_post_head()
-                self.wfile.write(bytes("<p>The Minecraft server is stopping</p>", "utf-8"))
                 if 'log' in ret:
-                    self.wfile.write(bytes("<p>%s</p>" % ret['log'], "utf-8"))
+                    self.end_post_head("The Minecraft server is stopping", ret['log'])
+                else:
+                    self.end_post_head("The Minecraft server is stopping", None)
             except InternalError as err:
                 self.logger.info("Error during the minecraft server stopping: %s" % err)
                 self.send_err(500, "Error during the minecraft server stopping: %s" % err)
@@ -111,11 +111,10 @@ class MinecraftWeb(CGIHTTPRequestHandler):
                     self.send_resp(200)
 
                 self.send_header('Content-Type','text/html; charset=utf-8')
-                self.end_post_head()
                 if 'status' in ret:
-                    self.wfile.write(bytes("<p>Backup of the minecraft server: %s</p>" % ret['status'], "utf-8"))
+                    self.end_post_head("Backup of the minecraft server", ret['status'])
                 else:
-                    self.wfile.write(bytes("<p>Backup of the minecraft server</p>", "utf-8"))
+                    self.end_post_head("Backup of the minecraft server", None)
             except InternalError as err:
                 self.logger.info("Error during the minecraft server backup: %s" % err)
                 self.send_err(500, "Error during the minecraft server backup: %s" % err)
@@ -132,8 +131,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
 
                     self.send_resp(200)
                     self.send_header('Content-Type','text/html; charset=utf-8')
-                    self.end_post_head()
-                    self.wfile.write(bytes("<p>RCON response: %s</p>" % ret, "utf-8"))
+                    self.end_post_head("RCON response", ret)
                 except InternalError as err:
                     self.logger.info("Can't execute the RCON command: %s" % err)
                     self.send_err(500, "Can't execute the RCON command: %s" % err)
