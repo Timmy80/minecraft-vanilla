@@ -1,0 +1,21 @@
+version: "3"
+services:
+    minecraft-server:
+        build: ../../
+        hostname: minecraft-vanilla
+        ports:
+          - "8000:8000"
+          - "25565:25565"
+          - "25575:25575"
+        environment:
+          #- MC_AUTO_CLEAN=True
+          #- MC_AUTO_BACKUP=True
+          #- MC_AUTO_DOWNLOAD=True
+          #- MC_AUTO_UPLOAD=True
+          - MC_NO_AUTO_START=True
+          - MC_USE_GFIRST=True
+          #- MINECRAFT_VERSION=fabric-1.19.4
+        volumes:
+          - "./server:/minecraft/server"
+        command: 
+          serve -vv --web-port 8000

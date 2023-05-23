@@ -5,24 +5,24 @@ LAST_IMAGE=$(shell docker images ${REPO}/minecraft-vanilla | sort | tail -1 | aw
 
 .PHONY: all build push latest-snapshot push-snapshot clean run rund help
 
-all: build ## Build by default released minecraft server docker image
+all: build ## Build by default latest docker images
 
-build: ## Build last released minecraft server docker image
+build: ## Build latest docker image
 	docker build -t ${REPO}/minecraft-vanilla .
 
 push: ## Build and push multi-architecture last released minecraft server docker image
 	docker buildx build --platform linux/amd64,linux/arm64/v8 -t ${REPO}/minecraft-vanilla --push .
 
-latest-develop: ## Build last develop minecraft server docker image
-	docker build --build-arg MINECRAFT_VERSION=latest-snapshot -t ${REPO}/minecraft-vanilla:develop ./
+develop: ## Build last development docker image
+	docker build -t ${REPO}/minecraft-vanilla:develop ./
 
-push-develop: ## Build and push multi-architecture last develop minecraft server docker image
+push-develop: ## Build and push multi-architecture last development docker image
 	docker buildx build --platform linux/amd64,linux/arm64/v8 -t ${REPO}/minecraft-vanilla:develop --push .
 
 clean: ## Remove running minecraft containers and minecraft images
 	if docker ps -a --filter ancestor=${REPO}/minecraft-vanilla | grep -q minecraft; then docker rm -f `docker ps -a --filter ancestor=${REPO}/minecraft-vanilla | grep minecraft | awk '{print $$NF}'`; fi
 	if docker images ${REPO}/minecraft-vanilla:latest | grep -q minecraft; then docker rmi ${REPO}/minecraft-vanilla:latest; fi
-	if docker images ${REPO}/minecraft-vanilla:snapshot | grep -q minecraft; then docker rmi ${REPO}/minecraft-vanilla:snapshot; fi
+	if docker images ${REPO}/minecraft-vanilla:develop | grep -q minecraft; then docker rmi ${REPO}/minecraft-vanilla:develop; fi
 
 run: ## Run minecraft server
 	docker run -ti --rm -p 8000:8000 -p 25565:25565 --name minecraft-vanilla ${LAST_IMAGE}
