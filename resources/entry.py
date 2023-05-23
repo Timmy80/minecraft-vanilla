@@ -150,6 +150,8 @@ class MinecraftWrapper(rcon.RCONServerHandler):
                         else:
                             if self.minecraftServer.isRunning():
                                 return json.dumps({ "code" : 409, "status": self.getStatus().name, "error": "cannot change a config on a running server."})
+                            if key in ["version", "action", "verbose", "very_verbose", "rcon_port", "rcon_pswd", "jar", "workdir", "backup_dir", "web_port", "backup_frequency", "auto_clean", "no_auto_start"]:
+                                return  json.dumps({ "code" : 404, "status": self.getStatus().name, "error" : "this configuration cannot be changed remotely"})
                             value=" ".join(args[3:])
                             # lets find the actual type of the config and set the value
                             if isinstance(dictArgs[key], bool):
@@ -223,49 +225,57 @@ def main() -> None:
         logging.fatal("invalid backup frequency %s. Value must be one of %s", MC_BACKUP_FREQUENCY, cronFrequencies)
         sys.exit(1)
 
-    parser = argparse.ArgumentParser(description='Manage a minecraft java server')
-    parser.add_argument('-v', '--verbose', action="store_true", help="Increase output verbosity")
-    parser.add_argument('-vv', '--very-verbose', action="store_true", help="Increase output verbosity")
-    parser.add_argument('-j' , "--jar", default="/minecraft/minecraft_server.jar", help='The jar file for the minecraft server.')
-    parser.add_argument('-o', "--opt", default="nogui", help='The arguments of the minecraft server. "nogui" by default.')
-    parser.add_argument('-w', "--workdir", default="/minecraft/server", help='The working directory of the minecraft java server.')
-    parser.add_argument('-b', "--backup-dir", default="/minecraft/backup", help='The directory where to store the backups localy')
-    parser.add_argument("--min-heap", default=MC_MIN_HEAP, help='The min heap allocated to the jvm')
-    parser.add_argument("--max-heap", default=MC_MAX_HEAP, help='The max heap allocated to the jvm')
-    parser.add_argument("--use-gfirst", action="store_true", help='Use the G1 Garbage Collector instead of the Parallel Garbage Collector')
-    parser.add_argument("--gc-threads", default="3", help='Number of threads allocated to be Garbage Collector')
-    parser.add_argument("--rcon-port", default=25575, type=int, help='the listening port for RCON(Remote CONsole)')
-    parser.add_argument("--rcon-pswd", default="rcon-passwd", help='the password for RCON(Remote CONsole)')
-    parser.add_argument('--web-port', default=0, type=int, help="the listening port of McWeb to control the minecraft server (0 to disable)")
-    parser.add_argument("--backup-frequency", default=MC_BACKUP_FREQUENCY, choices=cronFrequencies, help='the frequeny of the world backups.')
-    parser.add_argument("--no-auto-start", action="store_true", help='avoid the the minecraft server to starts automaticaly.')
-    parser.add_argument("--auto-clean", action="store_true", help="clean the old backups automaticaly. (acts local backup only)")
-    parser.add_argument("--auto-backup", action="store_true", help='backup the map automaticaly')
-    parser.add_argument("--auto-download", action="store_true", help='download the lastet backup of the map before starting')
-    parser.add_argument("--auto-upload", action="store_true", help='upload the backup on a remote server')
-    parser.add_argument("--ssh-remote-url", default=MC_SSH_REMOTE_URL, help='the url to access the remote ssh server for backup. ex: backup@backup-instance.fr:/path/to/dir')
-    parser.add_argument("--version", default=MINECRAFT_VERSION, help='The vesion of minecraft to install in the image. If it starts with "fabric-" a fabric modded server will be downloaded.')
-    parser.add_argument('action', choices=("start", "stop", "backup", "status", "health_status", "command", "property", "config", "set-version", "serve"), help='The action to perform')
-    parser.add_argument('args', nargs='*', help='arguments of the action')
+    parent_parser = argparse.ArgumentParser(add_help=False)
+    parent_parser.add_argument('-v', '--verbose', action="store_true", help="Increase output verbosity")
+    parent_parser.add_argument('-vv', '--very-verbose', action="store_true", help="Increase output verbosity")
+    parent_parser.add_argument("--rcon-port", default=25575, type=int, help='the listening port for RCON(Remote CONsole)')
+    parent_parser.add_argument("--rcon-pswd", default="rcon-passwd", help='the password for RCON(Remote CONsole)')
+
+    args_parser = argparse.ArgumentParser(add_help=False)
+    args_parser.add_argument('args', nargs='*', help='arguments')
+
+    parser = argparse.ArgumentParser(description='Manage a minecraft java server')#, parents=[parent_parser])
+
+    subparsers = parser.add_subparsers(help='The action to perform', required=True, dest="action")
+
+    serve_parser = subparsers.add_parser("serve", help="Start the internal rcon/web server that manages a minecraft java server.", parents=[parent_parser])
+    serve_parser.add_argument('-j' , "--jar", default="/minecraft/minecraft_server.jar", help='The jar file for the minecraft server.')
+    serve_parser.add_argument('-o', "--opt", default="nogui", help='The arguments of the minecraft server. "nogui" by default.')
+    serve_parser.add_argument('-w', "--workdir", default="/minecraft/server", help='The working directory of the minecraft java server.')
+    serve_parser.add_argument('-b', "--backup-dir", default="/minecraft/backup", help='The directory where to store the backups localy')
+    serve_parser.add_argument("--min-heap", default=MC_MIN_HEAP, help='The min heap allocated to the jvm')
+    serve_parser.add_argument("--max-heap", default=MC_MAX_HEAP, help='The max heap allocated to the jvm')
+    serve_parser.add_argument("--use-gfirst", action="store_true", help='Use the G1 Garbage Collector instead of the Parallel Garbage Collector')
+    serve_parser.add_argument("--gc-threads", default="3", help='Number of threads allocated to be Garbage Collector')
+    serve_parser.add_argument('--web-port', default=0, type=int, help="the listening port of McWeb to control the minecraft server (0 to disable)")
+    serve_parser.add_argument("--backup-frequency", default=MC_BACKUP_FREQUENCY, choices=cronFrequencies, help='the frequeny of the world backups.')
+    serve_parser.add_argument("--no-auto-start", action="store_true", help='avoid the the minecraft server to starts automaticaly.')
+    serve_parser.add_argument("--auto-clean", action="store_true", help="clean the old backups automaticaly. (acts local backup only)")
+    serve_parser.add_argument("--auto-backup", action="store_true", help='backup the map automaticaly')
+    serve_parser.add_argument("--auto-download", action="store_true", help='download the lastet backup of the map before starting')
+    serve_parser.add_argument("--auto-upload", action="store_true", help='upload the backup on a remote server')
+    serve_parser.add_argument("--ssh-remote-url", default=MC_SSH_REMOTE_URL, help='the url to access the remote ssh server for backup. ex: backup@backup-instance.fr:/path/to/dir')
+    serve_parser.add_argument("--version", default=MINECRAFT_VERSION, help='The vesion of minecraft to install in the image. If it starts with "fabric-" a fabric modded server will be downloaded.')
+
+    subparsers.add_parser("start", help="Start the minecraft java server", parents=[parent_parser])
+    subparsers.add_parser("stop", help="Stop the minecraft java server", parents=[parent_parser])
+    subparsers.add_parser("backup", help="Backup the minecraft world", parents=[parent_parser])
+    subparsers.add_parser("status", help="Get the status of the minecraft server", parents=[parent_parser])
+    subparsers.add_parser("health_status", help="Perform a health check", parents=[parent_parser])
+
+    subparsers.add_parser("command", help="Send a rcon command to the minecraft server", parents=[parent_parser, args_parser])
+    subparsers.add_parser("property", help="Get or set a property", parents=[parent_parser, args_parser])
+    subparsers.add_parser("config", help="Get or set a configuration", parents=[parent_parser, args_parser])
+
+    version_parser = subparsers.add_parser("set-version", help="Set the minecraft version", parents=[parent_parser])
+    version_parser.add_argument("version", help='The vesion of minecraft to install in the image. If it starts with "fabric-" a fabric modded server will be downloaded.')
+
 
     args = parser.parse_args()
     if args.verbose :
         logging.getLogger('').setLevel("INFO")
     if args.very_verbose:
         logging.getLogger('').setLevel("DEBUG")
-
-    if not args.no_auto_start:
-        args.no_auto_start=getBoolEnv("MC_NO_AUTO_START")
-    if not args.auto_clean:
-        args.auto_clean=getBoolEnv("MC_AUTO_CLEAN", getBoolEnv("DOCLEANING"))
-    if not args.auto_backup:
-        args.auto_backup=getBoolEnv("MC_AUTO_BACKUP", getBoolEnv("DOBACKUP"))
-    if not args.auto_download:
-        args.auto_download=getBoolEnv("MC_AUTO_DOWNLOAD")
-    if not args.auto_upload:
-        args.auto_upload=getBoolEnv("MC_AUTO_UPLOAD")
-    if not args.use_gfirst:
-        args.use_gfirst=getBoolEnv("MC_USE_GFIRST")
 
     logging.debug(args)
     action=args.action
@@ -280,14 +290,30 @@ def main() -> None:
                 json_resp = json.loads(resp)
                 if not json_resp["code"] == 200:
                     sys.exit(1)
-            elif action in ["property", "config", "set-version"]:
+            elif action == "set-version":
+                print(client.send("minecraft {action} {version}".format(action=action, version=args.version)))
+            elif action in ["property", "config"]:
                 print(client.send("minecraft {action} {args}".format(action=action, args=" ".join(args.args))))
             else:
                 print(client.send("minecraft {action}".format(action=action)))
         except:
             sys.stderr.write("service unavailable")
             sys.exit(1)
+
     elif action == "serve" :
+        if not args.no_auto_start:
+            args.no_auto_start=getBoolEnv("MC_NO_AUTO_START")
+        if not args.auto_clean:
+            args.auto_clean=getBoolEnv("MC_AUTO_CLEAN", getBoolEnv("DOCLEANING"))
+        if not args.auto_backup:
+            args.auto_backup=getBoolEnv("MC_AUTO_BACKUP", getBoolEnv("DOBACKUP"))
+        if not args.auto_download:
+            args.auto_download=getBoolEnv("MC_AUTO_DOWNLOAD")
+        if not args.auto_upload:
+            args.auto_upload=getBoolEnv("MC_AUTO_UPLOAD")
+        if not args.use_gfirst:
+            args.use_gfirst=getBoolEnv("MC_USE_GFIRST")
+
         try:
             if not MCDownloader.isDownloaded():
                 downloader=MCDownloader.getInstance(args.version)
