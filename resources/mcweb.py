@@ -75,7 +75,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
         self.end_get_head()
 
     def do_POST(self):
-        if self.path_prefix + "/start":
+        if self.path == (self.path_prefix + "/start"):
             try:
                 self.minecraft_server.start()
                 self.logger.info("Start the minecraft server")
@@ -88,7 +88,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             except:
                 self.logger.info("Error during the minecraft server starting")
                 self.send_err(500, "Error during the minecraft server starting")
-        elif self.path_prefix + "/stop":
+        elif self.path == (self.path_prefix + "/stop"):
             try:
                 ret = self.minecraft_server.stop()
                 self.logger.info("Stop the minecraft server")
@@ -104,7 +104,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             except:
                 self.logger.info("Error during the minecraft server stopping")
                 self.send_err(500, "Error during the minecraft server stopping")
-        elif self.path == "/backup":
+        elif self.path == (self.path_prefix + "/backup"):
             try:
                 ret = self.minecraft_server.backup()
                 self.logger.info("Backup the minecraft server")
@@ -124,7 +124,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             except:
                 self.logger.info("Error during the minecraft server backup")
                 self.send_err(500, "Error during the minecraft server backup")
-        elif self.path == "/rcon":
+        elif self.path == (self.path_prefix + "/rcon"):
             fields = parse_qs(str(self.rfile.read(int(self.headers.get('content-length'))), "UTF-8"))
             if 'rcon' in fields:
                 try:
