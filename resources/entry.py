@@ -92,7 +92,7 @@ class MinecraftWrapper(rcon.RCONServerHandler):
         return self.minecraftServer.backup()
 
     def mc_web_start(self):
-        self.web_thread = threading.Thread(target=MinecraftWeb.run, args=(self.args.web_port, self.minecraftServer))
+        self.web_thread = threading.Thread(target=MinecraftWeb.run, args=(self.args.web_port, self.args.web_path_prefix, self.minecraftServer))
         self.web_thread.start()
         return { "code" : 200 }
 
@@ -218,6 +218,7 @@ def main() -> None:
     MC_SSH_REMOTE_URL = os.getenv("MC_SSH_REMOTE_URL", "")
     MC_MIN_HEAP = os.getenv("MC_MIN_HEAP", os.getenv("MINHEAP", "2048"))
     MC_MAX_HEAP = os.getenv("MC_MAX_HEAP", os.getenv("MAXHEAP", "6144"))
+    MC_WEB_PATH_PREFIX = os.getenv("MC_WEB_PATH_PREFIX", "")
     MC_BACKUP_FREQUENCY = os.getenv("MC_BACKUP_FREQUENCY", "weekly")
     MINECRAFT_VERSION = os.getenv("MINECRAFT_VERSION", "latest-release")
 
@@ -247,7 +248,8 @@ def main() -> None:
     serve_parser.add_argument("--max-heap", default=MC_MAX_HEAP, help='The max heap allocated to the jvm')
     serve_parser.add_argument("--use-gfirst", action="store_true", help='Use the G1 Garbage Collector instead of the Parallel Garbage Collector')
     serve_parser.add_argument("--gc-threads", default="3", help='Number of threads allocated to be Garbage Collector')
-    serve_parser.add_argument('--web-port', default=0, type=int, help="the listening port of McWeb to control the minecraft server (0 to disable)")
+    serve_parser.add_argument('--web-port', default=0, type=int, help="The listening port of McWeb to control the minecraft server (0 to disable)")
+    serve_parser.add_argument('--web-path-prefix', default=MC_WEB_PATH_PREFIX, help="Url path prefix in case of a reverse proxy")
     serve_parser.add_argument("--backup-frequency", default=MC_BACKUP_FREQUENCY, choices=cronFrequencies, help='the frequeny of the world backups.')
     serve_parser.add_argument("--no-auto-start", action="store_true", help='avoid the the minecraft server to starts automaticaly.')
     serve_parser.add_argument("--auto-clean", action="store_true", help="clean the old backups automaticaly. (acts local backup only)")

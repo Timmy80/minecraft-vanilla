@@ -60,6 +60,9 @@ If you want to manage your Minecraft server through HTTP, you can by specifying 
 This option must be assigned on the `minecraft serve` call.  
 By default, this is enabled in the Docker container on the port 8000.
 
+In case of a reverse proxy you can customize the path prefix to have _example.com/mc-serv1/_ with the parameter:
+*MC_WEB_PATH_PREFIX*=/mc-serv1
+
 # How to build
 
 To build the latest image locally:

@@ -10,8 +10,9 @@ import logging
 from minecraft import MinecraftServer, InternalError
 
 class MinecraftWeb(CGIHTTPRequestHandler):
-    def __init__(self, minecraft_server: MinecraftServer):
+    def __init__(self, path_prefix: str, minecraft_server: MinecraftServer):
         self.logger = logging.getLogger('mc_web')
+        self.path_prefix = path_prefix
         self.minecraft_server = minecraft_server
         self.logger.info("McWeb server started")
 
@@ -39,6 +40,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
                 'mc': {
                     'name': platform.node(),
                     'method': 'GET',
+                    'path_prefix': self.path_prefix,
                     'running': self.minecraft_server.isRunning(),
                 }
             })
@@ -51,6 +53,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
                 'mc': {
                     'name': platform.node(),
                     'method': 'POST',
+                    'path_prefix': self.path_prefix,
                     'running': self.minecraft_server.isRunning(),
                     'result': result,
                     'log': log,
@@ -72,7 +75,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
         self.end_get_head()
 
     def do_POST(self):
-        if self.path == "/start":
+        if self.path == (self.path_prefix + "/start"):
             try:
                 self.minecraft_server.start()
                 self.logger.info("Start the minecraft server")
@@ -85,7 +88,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             except:
                 self.logger.info("Error during the minecraft server starting")
                 self.send_err(500, "Error during the minecraft server starting")
-        elif self.path == "/stop":
+        elif self.path == (self.path_prefix + "/stop"):
             try:
                 ret = self.minecraft_server.stop()
                 self.logger.info("Stop the minecraft server")
@@ -101,7 +104,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             except:
                 self.logger.info("Error during the minecraft server stopping")
                 self.send_err(500, "Error during the minecraft server stopping")
-        elif self.path == "/backup":
+        elif self.path == (self.path_prefix + "/backup"):
             try:
                 ret = self.minecraft_server.backup()
                 self.logger.info("Backup the minecraft server")
@@ -121,7 +124,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             except:
                 self.logger.info("Error during the minecraft server backup")
                 self.send_err(500, "Error during the minecraft server backup")
-        elif self.path == "/rcon":
+        elif self.path == (self.path_prefix + "/rcon"):
             fields = parse_qs(str(self.rfile.read(int(self.headers.get('content-length'))), "UTF-8"))
             if 'rcon' in fields:
                 try:
@@ -145,7 +148,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             self.send_err(404, "The post method %s is invalid" % self.path)
             self.end_headers()
 
-    def run(web_port, minecraft_server: MinecraftServer):
-        handler = MinecraftWeb(minecraft_server)
+    def run(web_port: int, path_prefix: str, minecraft_server: MinecraftServer):
+        handler = MinecraftWeb(path_prefix, minecraft_server)
         web_server = HTTPServer(("0.0.0.0", web_port), handler)
         web_server.serve_forever()
