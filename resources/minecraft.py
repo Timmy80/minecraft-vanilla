@@ -60,6 +60,7 @@ class PropertiesFile:
         self.setProperty("rcon.password", "rcon-passwd")
         self.setProperty("broadcast-rcon-to-ops", "true")
         self.setProperty("enable-rcon", "true")
+        self.setProperty("enable-jmx-monitoring", "true")
 
         for config in [ var for var in os.environ if var.startswith("MCCONF") ]:
             value = os.environ.get(config)
@@ -137,6 +138,7 @@ class MinecraftServer:
             command = ["java"]
             command.append(str.format("-Xmx{MAXHEAP}M", MAXHEAP=self.args.max_heap))
             command.append(str.format("-Xms{MINHEAP}M", MINHEAP=self.args.min_heap))
+            command.append("-javaagent:/minecraft/jmx_prometheus_javaagent.jar=9000:/minecraft/jmx_prom.yml")
             if not self.args.use_gfirst:
                 command.append(str.format("-XX:ParallelGCThreads={CPU_COUNT}", CPU_COUNT=self.args.gc_threads)) 
             else:

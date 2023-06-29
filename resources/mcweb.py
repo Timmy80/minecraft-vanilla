@@ -4,10 +4,12 @@ Minecraft web server to control the server
 
 from http.server import CGIHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs
+import urllib.request
 from jinja2 import Template
 import platform
 import logging
 from minecraft import MinecraftServer, InternalError
+import re
 
 class MinecraftWeb(CGIHTTPRequestHandler):
     def __init__(self, path_prefix: str, minecraft_server: MinecraftServer):
@@ -32,6 +34,9 @@ class MinecraftWeb(CGIHTTPRequestHandler):
         self.send_error(ret_val, msg)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.end_headers()
+
+    def writeln(self, line):
+        self.wfile.write(bytes(line+"\n", "utf-8"))
 
     def end_get_head(self):
         self.end_headers()
@@ -61,6 +66,41 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             })
             self.wfile.write(bytes(rendered, "utf-8"))
 
+    def end_get_prom(self):
+        self.end_headers()
+        isRunning = self.minecraft_server.isRunning()
+        self.writeln("# HELP mc_up Status of the java minecraft server.")
+        self.writeln("# TYPE mc_up gauge")
+        self.writeln("mc_up {up}".format( up = 1 if isRunning else 0 ))
+
+        if isRunning:
+            ready = True
+            try:
+                players = self.minecraft_server.asRcon("/list")
+                match=re.match("There are ([0-9]+) of a max", players)
+                if match :
+                    self.writeln("# HELP mc_players Count of connected players.")
+                    self.writeln("# TYPE mc_players gauge")
+                    self.writeln("mc_players {players}".format( players = match.group(1)))
+
+                entities = self.minecraft_server.asRcon("/tag @e list")
+                match=re.match("There are ([a-zA-Z0-9]+) tags on the ([0-9]+) entities", entities)
+                if match :
+                    self.writeln("# HELP mc_entities Count of entities.")
+                    self.writeln("# TYPE mc_entities gauge")
+                    self.writeln("mc_entities {entities}".format( entities = match.group(2)))
+
+                with urllib.request.urlopen("http://127.0.0.1:9000/") as response:
+                    if response.status == 200:
+                        self.wfile.write(response.read())
+            except ConnectionRefusedError as e:
+                ready = False
+
+            self.writeln("# HELP mc_ready Readyness Status of the java minecraft server (0 when starting, stopping, stuck...).")
+            self.writeln("# TYPE mc_ready gauge")
+            self.writeln("mc_ready {up}".format( up = 1 if ready else 0 ))
+
+
     def do_HEAD(self):
         if self.minecraft_server.isRunning():
             self.send_resp(200)
@@ -71,8 +111,12 @@ class MinecraftWeb(CGIHTTPRequestHandler):
 
     def do_GET(self):
         self.send_resp(200)
-        self.send_header('Content-Type','text/html; charset=utf-8')
-        self.end_get_head()
+        if self.path == (self.path_prefix + "/metrics"):
+            self.send_header('Content-Type','text/plain; version=0.0.4; charset=utf-8')
+            self.end_get_prom()
+        else:
+            self.send_header('Content-Type','text/html; charset=utf-8')
+            self.end_get_head()
 
     def do_POST(self):
         if self.path == (self.path_prefix + "/start"):
