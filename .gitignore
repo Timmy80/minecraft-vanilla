@@ -3,3 +3,4 @@ ssh
 .vscode
 server
 __pycache__
+.S3_key

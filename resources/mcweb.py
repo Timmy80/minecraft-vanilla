@@ -163,7 +163,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
                 else:
                     self.end_post_head("Backup of the minecraft server", None)
             except InternalError as err:
-                self.logger.info("Error during the minecraft server backup: %s" % err)
+                self.logger.error("Error during the minecraft server backup: %s" % err, stack_info=True)
                 self.send_err(500, "Error during the minecraft server backup: %s" % err)
             except:
                 self.logger.info("Error during the minecraft server backup")
@@ -192,6 +192,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
             self.send_err(404, "The post method %s is invalid" % self.path)
             self.end_headers()
 
+    @staticmethod
     def run(web_port: int, path_prefix: str, minecraft_server: MinecraftServer):
         handler = MinecraftWeb(path_prefix, minecraft_server)
         web_server = HTTPServer(("0.0.0.0", web_port), handler)

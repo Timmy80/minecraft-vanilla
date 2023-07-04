@@ -6,16 +6,28 @@ services:
         ports:
           - "8000:8000"
           - "25565:25565"
-          - "25575:25575"
+          #- "25575:25575"
         environment:
+          - MINECRAFT_VERSION=latest
           #- MC_AUTO_CLEAN=True
           #- MC_AUTO_BACKUP=True
-          #- MC_AUTO_DOWNLOAD=True
+          #- MC_NO_AUTO_START=True
+          #- MC_USE_GFIRST=True
+          ### WORKING WITH REMOTE STORAGE ###
           #- MC_AUTO_UPLOAD=True
-          - MC_NO_AUTO_START=True
-          - MC_USE_GFIRST=True
-          #- MINECRAFT_VERSION=fabric-1.19.4
+          #- MC_AUTO_DOWNLOAD=True
+          #- MC_S3_REMOTE_URL=https://s3.gra1.standard.cloud.ovh.net
+          #- MC_S3_REGION=gra1
+          #- MC_S3_BUCKET=minecraft-world
+          #- MC_S3_KEY_ID=...
+          #- MC_S3_KEY_SECRET=/run/secrets/s3_key
         volumes:
           - "./server:/minecraft/server"
         command: 
           serve -vv --web-port 8000
+# Use this for S3 Object storage secret
+        secrets:
+          - s3_key
+secrets:
+  s3_key:
+    file: ../../.S3_key

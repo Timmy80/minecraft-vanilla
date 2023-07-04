@@ -11,6 +11,8 @@ import shutil
 import sys
 import traceback
 from enum import Enum
+from mcs3backup import MinecraftS3BackupManager
+import typing
 
 class PropertiesFile:
 
@@ -90,8 +92,9 @@ class MinecraftStatus(Enum):
     UPLOADING = 4
     DOWNLOADING = 5
     LOADING = 6
+    FETCHING = 7
 
-def ignorelogs(tarinfo):
+def ignorelogs(tarinfo:tarfile.TarInfo) -> (tarfile.TarInfo):
     """
     function to exclude the logs from the backups
     """
@@ -108,21 +111,31 @@ class MinecraftServer:
         self.status = MinecraftStatus.STOPPED
         self._lock = threading.Lock()
         self.jvm = None
+        self.s3_manager = None
 
     def run(self):
         try:
             """Start the JVM"""
             logging.info("Server is starting")
 
-            if self.args.auto_download :
+            if self.isS3Backuped() and self.args.auto_download:
+                with self._lock:
+                    self.status = MinecraftStatus.FETCHING
+                self.s3_manager = MinecraftS3BackupManager.buildWith(self.args)
+                self.s3_manager.fetchRemote()
+            elif self.args.auto_download :
                 with self._lock:
                     self.status = MinecraftStatus.DOWNLOADING
                 self._download()
-            # if auto-download of the workdir is empty
+
+            # if auto-download and the workdir is empty
             if self.args.auto_download or not os.listdir(self.args.workdir):
                 with self._lock:
                     self.status = MinecraftStatus.LOADING
-                self._load()
+                if self.isS3Backuped():
+                    self.s3_manager.pull()
+                else:
+                    self._load()
 
             # First lets create the eula.txt file if needed
             workPath = os.path.abspath(self.args.workdir)
@@ -156,11 +169,7 @@ class MinecraftServer:
             if self.args.auto_backup or self.args.auto_upload:
                 with self._lock:
                     self.status = MinecraftStatus.SAVING
-                backup = self._backup()
-            if self.args.auto_upload :
-                with self._lock:
-                    self.status = MinecraftStatus.UPLOADING
-                self._upload(backup)
+                self._backup()
 
         except:
             exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -223,15 +232,28 @@ class MinecraftServer:
         with tarfile.open(name=filepath, mode='r:gz') as tar :
             tar.extractall(path=self.args.workdir)
 
-    def _backup(self):
-        logging.info("cleaning old backups")
-        for filename in os.listdir(self.args.backup_dir):
-            fullpath = os.path.join(self.args.backup_dir,filename)
-            logging.info("Removing backup: %s", fullpath)
-            os.remove(fullpath)
+    def _backup(self) -> typing.Tuple[dict[str, typing.Any], int]:
+        if self.isS3Backuped():
+            logging.info("fetching remote and local files for backup")
+            if self.args.auto_upload:
+                self.s3_manager.fetchRemote()
+                self.s3_manager.fetchLocal(filter=ignorelogs)
+
+        if not self.isS3Backuped():
+            logging.info("cleaning old backups")
+            backups = os.listdir(self.args.backup_dir)
+            if backups is not None and self.args.max_backup_count > 0:
+                backups.sort(reverse=True)
+                logging.debug("%d backup found localy: %s", len(backups), backups)
+                if len(backups) >= self.args.max_backup_count:
+                    for filename in backups[self.args.max_backup_count-1]:
+                        fullpath = os.path.join(self.args.backup_dir,filename)
+                        logging.info("Removing backup: %s", fullpath)
+                        os.remove(fullpath)
 
         logging.info("backuping world")
         res = []
+        code = 200
         try:
             # first we save the world and avoid the server from writting the map during the compression
             self.asRcon("say SERVER BACKUP STARTING. Server going readonly...")
@@ -240,11 +262,20 @@ class MinecraftServer:
         except:
             pass
 
-        self.properties.read()
-        tarName = "{0}_{1}.tar".format(self.properties.getProperty("level-name"), time.strftime("%Y-%m-%d_%Hh%M", time.gmtime()))
-        tarFile = os.path.join(self.args.backup_dir, tarName)
-        with tarfile.open(name=tarFile, mode='w') as tar :
-            tar.add(self.args.workdir, arcname="/", filter=ignorelogs)
+        if self.isS3Backuped():
+            try:
+                logging.info("pushing world")
+                self.s3_manager.push()
+            except:
+                logging.exception("S3 manager failed to push")
+                res.append("S3 backup failure")
+                code = 503
+        else:
+            self.properties.read()
+            tarName = "{0}_{1}.tar".format(self.properties.getProperty("level-name"), time.strftime("%Y-%m-%d_%Hh%M", time.gmtime()))
+            tarFile = os.path.join(self.args.backup_dir, tarName)
+            with tarfile.open(name=tarFile, mode='w') as tar :
+                tar.add(self.args.workdir, arcname="/", filter=ignorelogs)
 
         try:
             # re-enable the server ability to write the map
@@ -253,20 +284,35 @@ class MinecraftServer:
         except:
             pass
 
-        with open(tarFile, 'rb') as f_in:
-            with gzip.open('{0}.gz'.format(tarFile), 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
+        if not self.isS3Backuped():
+            with open(tarFile, 'rb') as f_in:
+                with gzip.open('{0}.gz'.format(tarFile), 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
 
-        backupFile = "{0}.gz".format(tarName)
+            backupFile = "{0}.gz".format(tarName)
 
-        os.remove(tarFile)
+            os.remove(tarFile)
 
-        return { "log": res, "file" : backupFile }
+            if self.args.auto_upload:
+                scpCmd = ["scp", "-o", "StrictHostKeyChecking=no", os.path.join(self.args.backup_dir, backupFile), self.args.ssh_remote_url]
+                logging.info("uploading world: %s", scpCmd)
+                res.append(subprocess.check_output(scpCmd).decode("utf-8"))
 
-    def _upload(self, backup):
-        scpCmd = ["scp", "-o", "StrictHostKeyChecking=no", os.path.join(self.args.backup_dir, backup["file"]), self.args.ssh_remote_url]
-        logging.info("uploading world: %s", scpCmd)
-        res = subprocess.check_output(scpCmd)
+            return ({ "log": res, "file" : backupFile }, code)
+        else:
+            return ({ "log": res}, code)
+
+    def isRemoteBackuped(self) -> bool:
+        if self.args.auto_download or self.args.auto_upload:
+            return True
+        else:
+            return False
+
+    def isS3Backuped(self) -> bool:
+        if self.args.s3_remote_url and self.isRemoteBackuped():
+            return True
+        else:
+            return False
 
     def start(self):
         if self.thread and self.thread.is_alive():
@@ -354,13 +400,11 @@ class MinecraftServer:
             if not self.acquireLock():
                 return { "code" : 503, "status": self.getStatus().name, "error": "Minecraft server is busy. Try again later."}
 
-            if self.status in [MinecraftStatus.DOWNLOADING, MinecraftStatus.UPLOADING]:
+            if self.status in [MinecraftStatus.DOWNLOADING, MinecraftStatus.UPLOADING, MinecraftStatus.FETCHING]:
                 return { "code" : 503, "status": self.status.name, "error": "A backup operation is aleady running. Try again later."}
 
-            backup = self._backup()
-            if self.args.auto_upload :
-                self._upload(backup)
-            backup["code"] = 200
+            backup, code = self._backup()
+            backup["code"] = code
             backup["status"] = self.status.name
             return backup
         finally:

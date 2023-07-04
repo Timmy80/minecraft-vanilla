@@ -163,8 +163,6 @@ class MinecraftWrapper(rcon.RCONServerHandler):
                             else:
                                 return  json.dumps({ "code" : 404, "status": self.getStatus().name, "error" : "this configuration cannot be changed remotely"})
                             return  json.dumps({ "code" : 200, "status": self.getStatus().name, "value" : dictArgs[key]})
-                    print(json.dumps(self.args))
-                    return  json.dumps({ "code" : 404, "status": self.getStatus().name, "error" : "key not available"})
                 elif action == "set-version":
                     if self.minecraftServer.isRunning():
                         return json.dumps({ "code" : 409, "status": self.getStatus().name, "error": "cannot change the version on a running server."})
@@ -215,11 +213,19 @@ def main() -> None:
 
     cronFrequencies = ["daily", "hourly", "monthly", "weekly"]
 
+    DEFAULT_MAX_BACKUP="3"
+
     MC_SSH_REMOTE_URL = os.getenv("MC_SSH_REMOTE_URL", "")
+    MC_S3_REMOTE_URL = os.getenv("MC_S3_REMOTE_URL", "")
+    MC_S3_BUCKET = os.getenv("MC_S3_BUCKET", "")
+    MC_S3_REGION = os.getenv("MC_S3_REGION", "")
+    MC_S3_KEY_ID = os.getenv("MC_S3_KEY_ID", "")
+    MC_S3_KEY_SECRET = os.getenv("MC_S3_KEY_SECRET", "")
     MC_MIN_HEAP = os.getenv("MC_MIN_HEAP", os.getenv("MINHEAP", "2048"))
     MC_MAX_HEAP = os.getenv("MC_MAX_HEAP", os.getenv("MAXHEAP", "6144"))
     MC_WEB_PATH_PREFIX = os.getenv("MC_WEB_PATH_PREFIX", "")
     MC_BACKUP_FREQUENCY = os.getenv("MC_BACKUP_FREQUENCY", "weekly")
+    MC_MAX_BACKUP_COUNT = os.getenv("MC_MAX_BACKUP_COUNT", DEFAULT_MAX_BACKUP)
     MINECRAFT_VERSION = os.getenv("MINECRAFT_VERSION", "latest-release")
 
     if not MC_BACKUP_FREQUENCY in cronFrequencies:
@@ -235,7 +241,7 @@ def main() -> None:
     args_parser = argparse.ArgumentParser(add_help=False)
     args_parser.add_argument('args', nargs='*', help='arguments')
 
-    parser = argparse.ArgumentParser(description='Manage a minecraft java server')#, parents=[parent_parser])
+    parser = argparse.ArgumentParser(description='Manage a minecraft java server')
 
     subparsers = parser.add_subparsers(help='The action to perform', required=True, dest="action")
 
@@ -251,13 +257,19 @@ def main() -> None:
     serve_parser.add_argument('--web-port', default=0, type=int, help="The listening port of McWeb to control the minecraft server (0 to disable)")
     serve_parser.add_argument('--web-path-prefix', default=MC_WEB_PATH_PREFIX, help="Url path prefix in case of a reverse proxy")
     serve_parser.add_argument("--backup-frequency", default=MC_BACKUP_FREQUENCY, choices=cronFrequencies, help='the frequeny of the world backups.')
-    serve_parser.add_argument("--no-auto-start", action="store_true", help='avoid the the minecraft server to starts automaticaly.')
-    serve_parser.add_argument("--auto-clean", action="store_true", help="clean the old backups automaticaly. (acts local backup only)")
-    serve_parser.add_argument("--auto-backup", action="store_true", help='backup the map automaticaly')
-    serve_parser.add_argument("--auto-download", action="store_true", help='download the lastet backup of the map before starting')
-    serve_parser.add_argument("--auto-upload", action="store_true", help='upload the backup on a remote server')
+    serve_parser.add_argument("--max-backup-count", default=MC_MAX_BACKUP_COUNT, type=int, help=f'the maximum count of local world backups. Unlimited if set to 0. {DEFAULT_MAX_BACKUP} by default.')
+    serve_parser.add_argument("--no-auto-start", action="store_true", help='avoid the minecraft server to start automaticaly.')
+    serve_parser.add_argument("--auto-clean", action="store_true", help="clean the old backups automaticaly. (acts on local backup only)")
+    serve_parser.add_argument("--auto-backup", action="store_true", help='backup the world automaticaly (following backup-frequency argument and on stop)')
+    serve_parser.add_argument("--auto-download", action="store_true", help='download the latest backup of the world before starting')
+    serve_parser.add_argument("--auto-upload", action="store_true", help='upload the backup on a remote server when stopping (require ssh or S3 object storage to be configured)')
     serve_parser.add_argument("--ssh-remote-url", default=MC_SSH_REMOTE_URL, help='the url to access the remote ssh server for backup. ex: backup@backup-instance.fr:/path/to/dir')
-    serve_parser.add_argument("--version", default=MINECRAFT_VERSION, help='The vesion of minecraft to install in the image. If it starts with "fabric-" a fabric modded server will be downloaded.')
+    serve_parser.add_argument("--s3-remote-url", default=MC_S3_REMOTE_URL, help='the url to access the remote object storage server for backup. ex: https://s3.gra1.standard.cloud.ovh.net')
+    serve_parser.add_argument("--s3-bucket", default=MC_S3_BUCKET, help='the bucket of the remote object storage server for backup. ex: minecraft-world')
+    serve_parser.add_argument("--s3-region", default=MC_S3_REGION, help='the region of the remote object storage server for backup. ex: gra1')
+    serve_parser.add_argument("--s3-key-id", default=MC_S3_KEY_ID, help='the key id of the remote object storage server for backup.')
+    serve_parser.add_argument("--s3-key-secret", default=MC_S3_KEY_SECRET, help='path to the secret for the object storage secret key. ex: /run/secrets/s3_key')
+    serve_parser.add_argument("--version", default=MINECRAFT_VERSION, help='The version of minecraft to install in the image. If it starts with "fabric-" a fabric modded server will be downloaded.')
 
     subparsers.add_parser("start", help="Start the minecraft java server", parents=[parent_parser])
     subparsers.add_parser("stop", help="Stop the minecraft java server", parents=[parent_parser])

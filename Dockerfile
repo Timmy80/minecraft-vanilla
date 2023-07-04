@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends -y \
     python3 \
     python3-distutils \
     python3-jinja2 \
+    python3-boto3 \
     curl \
  && apt-get -y clean \
  && chmod +x /usr/local/minecraft/*.sh /usr/local/minecraft/*.py \

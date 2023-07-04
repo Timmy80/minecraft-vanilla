@@ -179,7 +179,7 @@ class RCONClient:
         self.id = self.id + 1
         return self.id
 
-    def send(self, command):
+    def send(self, command) -> str:
         packet=RconPacket(self.allocateId(),tCOMMAND,command)
         MESSAGE=packet.serialize()
         self.logger.debug("command %s", binascii.hexlify(MESSAGE))
