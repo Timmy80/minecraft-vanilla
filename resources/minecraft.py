@@ -234,6 +234,9 @@ class MinecraftServer:
 
     def _backup(self) -> typing.Tuple[dict[str, typing.Any], int]:
         if self.isS3Backuped():
+            if self.s3_manager is None:
+                logging.info("no world to backup. server must start at least once.")
+                return ({ "log": ["no world to backup"]}, 200)
             logging.info("fetching remote and local files for backup")
             if self.args.auto_upload:
                 self.s3_manager.fetchRemote()
@@ -302,6 +305,28 @@ class MinecraftServer:
         else:
             return ({ "log": res}, code)
 
+    def _clean(self) -> typing.Tuple[dict[str, typing.Any], int]:
+        code = 200
+        try:
+            twenty_days_ago = time.time() - (60*60*24*20)
+            forty_days_ago = time.time() - (60*60*24*40)
+            logs_path = os.path.join(self.args.workdir, "logs")
+            res = []
+            if os.path.exists(logs_path):
+                for f in os.scandir(logs_path):
+                    if f.is_file() and f.stat().st_mtime < twenty_days_ago:
+                        os.remove(f.path)
+                        res.append(f"removed {f.path}")
+
+            for f in os.scandir(self.args.backup_dir):
+                if f.is_file() and f.stat().st_mtime < forty_days_ago:
+                    os.remove(f.path)
+                    res.append(f"removed {f.path}")
+        except:
+            logging.exception("unexpected error", stack_info=True)
+            code = 500
+        return ({ "log": res}, code)
+
     def isRemoteBackuped(self) -> bool:
         if self.args.auto_download or self.args.auto_upload:
             return True
@@ -317,7 +342,7 @@ class MinecraftServer:
     def start(self):
         if self.thread and self.thread.is_alive():
             raise InternalError("Server is already running")
-        self.thread = threading.Thread(target=self.run, args=())
+        self.thread = threading.Thread(target=self.run, args=(), name="minecraft")
         self.thread.start()
 
     def stop(self):
@@ -404,6 +429,24 @@ class MinecraftServer:
                 return { "code" : 503, "status": self.status.name, "error": "A backup operation is aleady running. Try again later."}
 
             backup, code = self._backup()
+            backup["code"] = code
+            backup["status"] = self.status.name
+            return backup
+        finally:
+            self.releaseLock()
+
+    def clean(self):
+        """
+        Thread safe cleaning method
+        """
+        try:
+            if not self.acquireLock():
+                return { "code" : 503, "status": self.getStatus().name, "error": "Minecraft server is busy. Try again later."}
+
+            if self.status in [MinecraftStatus.DOWNLOADING, MinecraftStatus.UPLOADING, MinecraftStatus.FETCHING]:
+                return { "code" : 503, "status": self.status.name, "error": "A backup operation is running. Try again later."}
+
+            backup, code = self._clean()
             backup["code"] = code
             backup["status"] = self.status.name
             return backup

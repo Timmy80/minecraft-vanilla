@@ -16,6 +16,35 @@ import stat
 from mcdownloader import MCDownloader
 from minecraft import MinecraftServer, PropertiesFile, InternalError
 from mcweb import MinecraftWeb
+import schedule
+import signal
+from pathlib import Path
+
+def cronBackup():
+    logging.info(subprocess.check_output(["minecraft", "backup"]).decode("utf-8"))
+
+def cronClean():
+    logging.info(subprocess.check_output(["minecraft", "clean"]).decode("utf-8"))
+
+class ScheduleThread(threading.Thread):
+
+    def __init__(self):
+        self.stop = threading.Event()
+        threading.Thread.__init__(self, name="schedule")
+
+    def run(self):
+        if self.stop.wait(10): # wait a few seconds for the rcon to start
+            return
+        
+        while True:
+            schedule.run_pending()
+            n = schedule.idle_seconds()
+            if n is None or self.stop.wait(n):
+                logging.getLogger("mc.schedule").info("scheduling stopped")
+                return
+            
+    def close(self):
+        self.stop.set()
 
 class MinecraftWrapper(rcon.RCONServerHandler):
     """
@@ -37,32 +66,36 @@ class MinecraftWrapper(rcon.RCONServerHandler):
 
     def __init__(self, args) -> None:
         self.args = args
-        #self.workerThread = MinecraftWorkerThread(args)
+        self.rconSrv = None
         self.minecraftServer = MinecraftServer(args)
+        self.scheduleThread = ScheduleThread()
+        self.mc_web = None
         if not self.args.no_auto_start :
             self.minecraftServer.start()
         else:
             logging.info("NOTICE: Automatic start disabled by configuration. Send the 'minecraft start' command to start the server.")
 
         if self.args.auto_clean :
-            cleanScript="/etc/cron.daily/minecleaning"
-            shutil.copyfile("/usr/local/minecraft/cleaning.sh", cleanScript)
-            st = os.stat(cleanScript)
-            os.chmod(cleanScript, st.st_mode | stat.S_IEXEC)
+            schedule.every().day.do(cronClean)
         if self.args.auto_backup:
-            backupScript="/etc/cron.{frequency}/minebackup".format(frequency=self.args.backup_frequency)
-            shutil.copyfile("/usr/local/minecraft/backup.sh", backupScript)
-            st = os.stat(backupScript)
-            os.chmod(backupScript, st.st_mode | stat.S_IEXEC)
+            job = schedule.every().week # weekly by default
+            if args.backup_frequency == "daily":
+                job = schedule.every().day
+            elif args.backup_frequency == "hourly":
+                job = schedule.every().hour
+            elif args.backup_frequency == "monthly":
+                job = schedule.every(30).day                
+            job.do(cronBackup)
         if self.args.auto_clean or self.args.auto_backup:
-            self.cron = subprocess.Popen("cron")
+            self.scheduleThread.start()
 
-        if not os.path.isdir("/root/.ssh"):
-            os.mkdir("/root/.ssh")
-        if os.listdir("/minecraft/ssh"):
-            subprocess.check_call("cp /minecraft/ssh/id_* /root/.ssh", shell=True)
-            subprocess.check_call("chmod 600 /root/.ssh/id_*", shell=True)
-            subprocess.check_call("chmod 644 /root/.ssh/id_*.pub", shell=True)
+        if self.args.ssh_remote_url:
+            if not os.path.isdir("/root/.ssh"):
+                os.mkdir("/root/.ssh")
+            if os.listdir("/minecraft/ssh"):
+                subprocess.check_call("cp /minecraft/ssh/id_* /root/.ssh", shell=True)
+                subprocess.check_call("chmod 600 /root/.ssh/id_*", shell=True)
+                subprocess.check_call("chmod 644 /root/.ssh/id_*.pub", shell=True)
 
     def asRcon(self, command):
         return self.minecraftServer.asRcon(command)
@@ -90,10 +123,13 @@ class MinecraftWrapper(rcon.RCONServerHandler):
 
     def mc_backup(self):
         return self.minecraftServer.backup()
+    
+    def mc_clean(self):
+        return self.minecraftServer.clean()
 
     def mc_web_start(self):
-        self.web_thread = threading.Thread(target=MinecraftWeb.run, args=(self.args.web_port, self.args.web_path_prefix, self.minecraftServer))
-        self.web_thread.start()
+        self.mc_web = MinecraftWeb(self.args.web_port, self.args.web_path_prefix, self.minecraftServer)
+        self.mc_web.start()
         return { "code" : 200 }
 
     def fowardCommand(self, command):
@@ -114,6 +150,8 @@ class MinecraftWrapper(rcon.RCONServerHandler):
                     return json.dumps({ "code" : 200, "status": self.getStatus().name})
                 elif action == "backup":
                     return json.dumps(self.mc_backup())
+                elif action == "clean":
+                    return json.dumps(self.mc_clean())
                 elif action == "health_status":
                     if self.minecraftServer.isRunning():
                         return json.dumps(self.fowardCommand("list"))
@@ -190,16 +228,30 @@ class MinecraftWrapper(rcon.RCONServerHandler):
             return json.dumps({ "code" : 500, "status": self.getStatus().name, "error": respStr})
 
     def serve(self):
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
         if self.args.web_port > 0:
             self.mc_web_start()
 
         try:
-            rconSrv = rcon.RCONServer('', self.args.rcon_port, self.args.rcon_pswd, self)
-            rconSrv.run()
+            self.rconSrv = rcon.RCONServer('', self.args.rcon_port, self.args.rcon_pswd, self)
+            self.rconSrv.run()
         finally:
+            logging.info("stopping scheduler and minecraft threads")
+            self.scheduleThread.close()
+            self.scheduleThread.join()
             if self.minecraftServer.isRunning():
                 self.minecraftServer.stop()
             self.minecraftServer.join()
+            if self.mc_web: 
+                self.mc_web.close()
+            logging.info("Bye")
+
+    def exit_gracefully(self,signum, frame):
+        logging.info("stopping rcon server")
+        if self.rconSrv is not None:
+            logging.debug("rcon close required")
+            self.rconSrv.close()
 
     def getStatus(self):
         return self.minecraftServer.getStatus()
@@ -276,6 +328,7 @@ def main() -> None:
     subparsers.add_parser("backup", help="Backup the minecraft world", parents=[parent_parser])
     subparsers.add_parser("status", help="Get the status of the minecraft server", parents=[parent_parser])
     subparsers.add_parser("health_status", help="Perform a health check", parents=[parent_parser])
+    subparsers.add_parser("clean", help="Clean logs and old backups", parents=[parent_parser])
 
     subparsers.add_parser("command", help="Send a rcon command to the minecraft server", parents=[parent_parser, args_parser])
     subparsers.add_parser("property", help="Get or set a property", parents=[parent_parser, args_parser])
@@ -293,7 +346,7 @@ def main() -> None:
 
     logging.debug(args)
     action=args.action
-    if action in ["start", "stop", "status", "backup", "command", "health_status", "property", "config", "set-version"]:
+    if action in ["start", "stop", "status", "backup", "command", "health_status", "clean", "property", "config", "set-version"]:
         try:
             client = rcon.RCONClient("127.0.0.1", args.rcon_port, args.rcon_pswd)
             if action == "command":
@@ -329,9 +382,10 @@ def main() -> None:
             args.use_gfirst=getBoolEnv("MC_USE_GFIRST")
 
         try:
-            if not MCDownloader.isDownloaded():
+            download_dir = Path(args.workdir).parent
+            if not MCDownloader.isDownloaded(download_dir):
                 downloader=MCDownloader.getInstance(args.version)
-                downloader.download()
+                downloader.download(download_dir)
         except NameError as e:
             logging.fatal(e)
             sys.exit(128)

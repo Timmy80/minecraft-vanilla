@@ -89,6 +89,9 @@ class RCONServer:
             except KeyboardInterrupt :
                 self.s.close()
                 return
+            except OSError:
+                self.s.close()
+                return
             except :
                 c.close()
                 exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -148,13 +151,16 @@ class RCONServer:
         self.logger.debug("send:%s", binascii.hexlify(MESSAGE))
         c.send(MESSAGE)
 
+    def close(self):
+        self.s.close()
+
 class RCONClient:
     """A very simple RCON client"""
     BUFFER_SIZE = 1024
 
     def __init__(self, serveradress, serverport, passwd):
         self.logger = logging.getLogger(str.format("RCON-CLI/{}", serverport))
-        self.id = 0;
+        self.id = 0
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.s.connect((serveradress, int(serverport)))

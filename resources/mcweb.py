@@ -3,6 +3,7 @@ Minecraft web server to control the server
 """
 
 from http.server import CGIHTTPRequestHandler, HTTPServer
+import threading
 from urllib.parse import parse_qs
 import urllib.request
 from jinja2 import Template
@@ -12,7 +13,9 @@ from minecraft import MinecraftServer, InternalError
 import re
 
 class MinecraftWeb(CGIHTTPRequestHandler):
-    def __init__(self, path_prefix: str, minecraft_server: MinecraftServer):
+    def __init__(self, web_port, path_prefix: str, minecraft_server: MinecraftServer):
+        self.thread = None
+        self.web_port = web_port
         self.logger = logging.getLogger('mc_web')
         self.path_prefix = path_prefix
         self.minecraft_server = minecraft_server
@@ -191,9 +194,16 @@ class MinecraftWeb(CGIHTTPRequestHandler):
         else:
             self.send_err(404, "The post method %s is invalid" % self.path)
             self.end_headers()
+            
+    def start(self):
+        if self.thread and self.thread.is_alive():
+            raise InternalError("Server is already running")
+        self.thread = threading.Thread(target=self.run, args=(), name="mc_web")
+        self.thread.start()
 
-    @staticmethod
-    def run(web_port: int, path_prefix: str, minecraft_server: MinecraftServer):
-        handler = MinecraftWeb(path_prefix, minecraft_server)
-        web_server = HTTPServer(("0.0.0.0", web_port), handler)
-        web_server.serve_forever()
+    def run(self):
+        self.web_server = HTTPServer(("0.0.0.0", self.web_port), self)
+        self.web_server.serve_forever()
+
+    def close(self):
+        self.web_server.shutdown()
