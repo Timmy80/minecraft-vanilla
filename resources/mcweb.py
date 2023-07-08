@@ -16,7 +16,7 @@ class MinecraftWeb(CGIHTTPRequestHandler):
     def __init__(self, web_port, path_prefix: str, minecraft_server: MinecraftServer):
         self.thread = None
         self.web_port = web_port
-        self.logger = logging.getLogger('mc_web')
+        self.logger = logging.getLogger('mc.MinecraftWeb')
         self.path_prefix = path_prefix
         self.minecraft_server = minecraft_server
         self.logger.info("McWeb server started")

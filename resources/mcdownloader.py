@@ -51,7 +51,7 @@ class VanillaDownloader(MCDownloader):
     default_manifest=VANILLA_MANIFEST_URL
 
     def __init__(self, manifest_url=VANILLA_MANIFEST_URL, version="latest"):
-        self.logger=logging.getLogger('vanilla-downloader')
+        self.logger=logging.getLogger('mc.vanilla-downloader')
         self.logger.debug("Vanilla Downloader!")
 
         self.manifest_url=manifest_url
@@ -101,7 +101,7 @@ class FabricDownloader(MCDownloader):
     default_manifest=FABRIC_MANIFEST_URL
 
     def __init__(self, manifest_url=FABRIC_MANIFEST_URL, version="latest"):
-        self.logger=logging.getLogger('fabric-downloader')
+        self.logger=logging.getLogger('mc.fabric-downloader')
         self.logger.debug("Fabric Downloader!")
 
         self.manifest_url=manifest_url

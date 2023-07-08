@@ -21,10 +21,10 @@ import signal
 from pathlib import Path
 
 def cronBackup():
-    logging.info(subprocess.check_output(["minecraft", "backup"]).decode("utf-8"))
+    logging.getLogger("mc.wrapper.job").info(subprocess.check_output(["minecraft", "backup"]).decode("utf-8"))
 
 def cronClean():
-    logging.info(subprocess.check_output(["minecraft", "clean"]).decode("utf-8"))
+    logging.getLogger("mc.wrapper.job").info(subprocess.check_output(["minecraft", "clean"]).decode("utf-8"))
 
 class ScheduleThread(threading.Thread):
 
@@ -70,10 +70,11 @@ class MinecraftWrapper(rcon.RCONServerHandler):
         self.minecraftServer = MinecraftServer(args)
         self.scheduleThread = ScheduleThread()
         self.mc_web = None
+        self.logger = logging.getLogger("mc.wrapper")
         if not self.args.no_auto_start :
             self.minecraftServer.start()
         else:
-            logging.info("NOTICE: Automatic start disabled by configuration. Send the 'minecraft start' command to start the server.")
+            self.logger.info("NOTICE: Automatic start disabled by configuration. Send the 'minecraft start' command to start the server.")
 
         if self.args.auto_clean :
             schedule.every().day.do(cronClean)
@@ -219,12 +220,12 @@ class MinecraftWrapper(rcon.RCONServerHandler):
             else:
                 return json.dumps(self.fowardCommand(command))
         except InternalError as e :
-            logging.exception(e)
+            self.logger.exception(e)
             return json.dumps({ "code" : 500, "status": self.getStatus().name, "error": e.message})
         except:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             respStr= str.format("Error: exception cautgh. {}", traceback.format_exception(exc_type, exc_value, exc_traceback)[-1])
-            logging.exception(exc_type)
+            self.logger.exception(exc_type)
             return json.dumps({ "code" : 500, "status": self.getStatus().name, "error": respStr})
 
     def serve(self):
@@ -237,7 +238,7 @@ class MinecraftWrapper(rcon.RCONServerHandler):
             self.rconSrv = rcon.RCONServer('', self.args.rcon_port, self.args.rcon_pswd, self)
             self.rconSrv.run()
         finally:
-            logging.info("stopping scheduler and minecraft threads")
+            self.logger.info("stopping scheduler and minecraft threads")
             self.scheduleThread.close()
             self.scheduleThread.join()
             if self.minecraftServer.isRunning():
@@ -245,12 +246,12 @@ class MinecraftWrapper(rcon.RCONServerHandler):
             self.minecraftServer.join()
             if self.mc_web: 
                 self.mc_web.close()
-            logging.info("Bye")
+            self.logger.info("Bye")
 
     def exit_gracefully(self,signum, frame):
-        logging.info("stopping rcon server")
+        self.logger.info("stopping rcon server")
         if self.rconSrv is not None:
-            logging.debug("rcon close required")
+            self.logger.debug("rcon close required")
             self.rconSrv.close()
 
     def getStatus(self):
@@ -285,8 +286,9 @@ def main() -> None:
         sys.exit(1)
 
     parent_parser = argparse.ArgumentParser(add_help=False)
-    parent_parser.add_argument('-v', '--verbose', action="store_true", help="Increase output verbosity")
-    parent_parser.add_argument('-vv', '--very-verbose', action="store_true", help="Increase output verbosity")
+    parent_parser.add_argument('-v', '--verbose', action="store_true", help="Increase output verbosity (info)")
+    parent_parser.add_argument('-vv', '--very-verbose', action="store_true", help="Increase output verbosity (debug)")
+    parent_parser.add_argument('-vvv', '--very-very-verbose', action="store_true", help="Increase output verbosity (full debug)")
     parent_parser.add_argument("--rcon-port", default=25575, type=int, help='the listening port for RCON(Remote CONsole)')
     parent_parser.add_argument("--rcon-pswd", default="rcon-passwd", help='the password for RCON(Remote CONsole)')
 
@@ -340,11 +342,17 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.verbose :
-        logging.getLogger('').setLevel("INFO")
+        logging.getLogger('mc').setLevel("INFO")
+        logging.getLogger('rcon').setLevel("INFO")
     if args.very_verbose:
+        logging.getLogger('').setLevel("INFO")
+        logging.getLogger('mc').setLevel("DEBUG")
+        logging.getLogger('rcon').setLevel("DEBUG")
+    if args.very_very_verbose:
         logging.getLogger('').setLevel("DEBUG")
 
-    logging.debug(args)
+
+    logging.getLogger("mc").debug(args)
     action=args.action
     if action in ["start", "stop", "status", "backup", "command", "health_status", "clean", "property", "config", "set-version"]:
         try:

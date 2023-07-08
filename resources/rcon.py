@@ -76,7 +76,7 @@ class RCONServer:
 
     def run(self):
         while True: 
-            self.logger = logging.getLogger(str.format("RCON-SRV/{}", self.bindPort))
+            self.logger = logging.getLogger(str.format("rcon.RCON-SRV/{}", self.bindPort))
             try:
                 # Establish connection with client. 
                 c, addr = self.s.accept()
@@ -98,7 +98,7 @@ class RCONServer:
                 logging.exception(exc_type)
 
     def processConnection(self, c, addr):
-        self.logger = logging.getLogger(str.format("RCON-SRV/{}/{}", self.bindPort, addr))
+        self.logger = logging.getLogger(str.format("rcon.RCON-SRV/{}/{}", self.bindPort, addr))
         # Get authentication packet
         auth=self.receive(c)
 
@@ -159,7 +159,7 @@ class RCONClient:
     BUFFER_SIZE = 1024
 
     def __init__(self, serveradress, serverport, passwd):
-        self.logger = logging.getLogger(str.format("RCON-CLI/{}", serverport))
+        self.logger = logging.getLogger(str.format("rcon.RCON-CLI/{}", serverport))
         self.id = 0
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:

@@ -13,6 +13,7 @@ import traceback
 from enum import Enum
 from mcs3backup import MinecraftS3BackupManager
 import typing
+from pathlib import Path
 
 class PropertiesFile:
 
@@ -94,13 +95,18 @@ class MinecraftStatus(Enum):
     LOADING = 6
     FETCHING = 7
 
-def ignorelogs(tarinfo:tarfile.TarInfo) -> (tarfile.TarInfo):
+def ignorelogslibs(tarinfo:tarfile.TarInfo) -> (tarfile.TarInfo):
     """
     function to exclude the logs from the backups
     """
     if tarinfo.name.startswith("logs"):
         return None
-    return tarinfo
+    elif tarinfo.name.startswith("libraries"):
+        return None
+    elif tarinfo.name.startswith("versions"):
+        return None
+    else:
+        return tarinfo
 
 class MinecraftServer:
 
@@ -112,15 +118,17 @@ class MinecraftServer:
         self._lock = threading.Lock()
         self.jvm = None
         self.s3_manager = None
+        self.logger = logging.getLogger("mc.minecraft")
 
     def run(self):
         try:
             """Start the JVM"""
-            logging.info("Server is starting")
+            self.logger.info("Server is starting")
 
             if self.isS3Backuped() and self.args.auto_download:
                 with self._lock:
                     self.status = MinecraftStatus.FETCHING
+                self.logger.info("fetching remote files")
                 self.s3_manager = MinecraftS3BackupManager.buildWith(self.args)
                 self.s3_manager.fetchRemote()
             elif self.args.auto_download :
@@ -133,12 +141,14 @@ class MinecraftServer:
                 with self._lock:
                     self.status = MinecraftStatus.LOADING
                 if self.isS3Backuped():
+                    self.logger.info("pulling remote files")
                     self.s3_manager.pull()
                 else:
                     self._load()
 
             # First lets create the eula.txt file if needed
             workPath = os.path.abspath(self.args.workdir)
+            jarPath = Path(self.args.jar).parent
             eulaPath = os.path.join(workPath, "eula.txt")
             if os.path.isfile(eulaPath) == False:
                 with open(eulaPath, "w") as eula:
@@ -147,11 +157,15 @@ class MinecraftServer:
             # Then create or update the server.properties
             self._populateProperties()
 
+            # Check
+            if not os.path.exists(self.args.jar):
+                raise IOError(f"jar not found {self.args.jar}")
+
             # Then we can build the java command and run it a subprocess
             command = ["java"]
             command.append(str.format("-Xmx{MAXHEAP}M", MAXHEAP=self.args.max_heap))
             command.append(str.format("-Xms{MINHEAP}M", MINHEAP=self.args.min_heap))
-            command.append("-javaagent:/minecraft/jmx_prometheus_javaagent.jar=9000:/minecraft/jmx_prom.yml")
+            command.append(f"-javaagent:/{jarPath}/jmx_prometheus_javaagent.jar=9000:/{jarPath}/jmx_prom.yml")
             if not self.args.use_gfirst:
                 command.append(str.format("-XX:ParallelGCThreads={CPU_COUNT}", CPU_COUNT=self.args.gc_threads)) 
             else:
@@ -159,7 +173,7 @@ class MinecraftServer:
             command.append("-jar")
             command.append(self.args.jar)
             command.append(self.args.opt)
-            logging.info(str(command))
+            self.logger.info(str(command))
             with self._lock:
                 self.jvm = subprocess.Popen(command, cwd=workPath)
             with self._lock:
@@ -174,13 +188,13 @@ class MinecraftServer:
         except:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             respStr= str.format("Error: exception cautgh. {}", traceback.format_exception(exc_type, exc_value, exc_traceback)[-1])
-            logging.exception(exc_type)
+            self.logger.exception(exc_type)
 
         finally:
             with self._lock:
                 self.status = MinecraftStatus.STOPPED
             self.jvm = None
-            logging.info("Server is stopped")
+            self.logger.info("Server is stopped")
 
     def _download(self):
         """
@@ -190,22 +204,22 @@ class MinecraftServer:
         userHost = urlParts[0]
         remotePath = urlParts[1]
         sshCmd = ["ssh", "-o", "StrictHostKeyChecking=no", userHost, "ls -t {0}/*.tar.gz | head -n 1".format(remotePath)]
-        logging.info("Looking for latest backup: %s", sshCmd)
+        self.logger.info("Looking for latest backup: %s", sshCmd)
         res = subprocess.check_output(sshCmd)
         lastbackup = res.decode("utf-8").strip()
         if lastbackup == "":
-            logging.info("No backup available on remote server.")
+            self.logger.info("No backup available on remote server.")
             return False
 
-        logging.info("latest backup is: %s", lastbackup)
+        self.logger.info("latest backup is: %s", lastbackup)
         filepath = os.path.join(self.args.backup_dir, str(lastbackup))
         if os.path.isfile(filepath):
-            logging.info("latest backup %s is already available locally", lastbackup)
+            self.logger.info("latest backup %s is already available locally", lastbackup)
         else:
             scpCmd = ["scp", "-o", "StrictHostKeyChecking=no", "{0}:{1}".format(userHost, os.path.join(remotePath, lastbackup)), self.args.backup_dir]
-            logging.info("downloading the latest backup")
+            self.logger.info("downloading the latest backup")
             res = subprocess.check_output(scpCmd)
-            logging.debug("Server response: %s", res)
+            self.logger.debug("Server response: %s", res)
 
     def _load(self):
         """
@@ -213,48 +227,48 @@ class MinecraftServer:
         """
         backups = os.listdir(self.args.backup_dir)
         if not backups:
-            logging.info("No backup available localy")
+            self.logger.info("No backup available localy")
             return False
 
         backups.sort()
         lastbackup = backups[-1]
-        logging.info("Latest local backup is: %s", lastbackup)
+        self.logger.info("Latest local backup is: %s", lastbackup)
         filepath = os.path.join(self.args.backup_dir, lastbackup)
 
-        logging.info("cleaning previous server working dir %s", self.args.workdir)
+        self.logger.info("cleaning previous server working dir %s", self.args.workdir)
         for torm in [ os.path.join(self.args.workdir, f) for f in os.listdir(self.args.workdir)]:
             if os.path.isfile(torm):
                 os.remove(torm)
             else:
                 shutil.rmtree(torm)
 
-        logging.info("Extracting backup %s to %s", filepath, self.args.workdir)
+        self.logger.info("Extracting backup %s to %s", filepath, self.args.workdir)
         with tarfile.open(name=filepath, mode='r:gz') as tar :
             tar.extractall(path=self.args.workdir)
 
     def _backup(self) -> typing.Tuple[dict[str, typing.Any], int]:
         if self.isS3Backuped():
             if self.s3_manager is None:
-                logging.info("no world to backup. server must start at least once.")
+                self.logger.info("no world to backup. server must start at least once.")
                 return ({ "log": ["no world to backup"]}, 200)
-            logging.info("fetching remote and local files for backup")
+            self.logger.info("fetching remote and local files for backup")
             if self.args.auto_upload:
                 self.s3_manager.fetchRemote()
-                self.s3_manager.fetchLocal(filter=ignorelogs)
+                self.s3_manager.fetchLocal(filter=ignorelogslibs)
 
         if not self.isS3Backuped():
-            logging.info("cleaning old backups")
+            self.logger.info("cleaning old backups")
             backups = os.listdir(self.args.backup_dir)
             if backups is not None and self.args.max_backup_count > 0:
                 backups.sort(reverse=True)
-                logging.debug("%d backup found localy: %s", len(backups), backups)
+                self.logger.debug("%d backup found localy: %s", len(backups), backups)
                 if len(backups) >= self.args.max_backup_count:
                     for filename in backups[self.args.max_backup_count-1]:
                         fullpath = os.path.join(self.args.backup_dir,filename)
-                        logging.info("Removing backup: %s", fullpath)
+                        self.logger.info("Removing backup: %s", fullpath)
                         os.remove(fullpath)
 
-        logging.info("backuping world")
+        self.logger.info("backuping world")
         res = []
         code = 200
         try:
@@ -267,10 +281,10 @@ class MinecraftServer:
 
         if self.isS3Backuped():
             try:
-                logging.info("pushing world")
+                self.logger.info("pushing world")
                 self.s3_manager.push()
             except:
-                logging.exception("S3 manager failed to push")
+                self.logger.exception("S3 manager failed to push")
                 res.append("S3 backup failure")
                 code = 503
         else:
@@ -278,7 +292,7 @@ class MinecraftServer:
             tarName = "{0}_{1}.tar".format(self.properties.getProperty("level-name"), time.strftime("%Y-%m-%d_%Hh%M", time.gmtime()))
             tarFile = os.path.join(self.args.backup_dir, tarName)
             with tarfile.open(name=tarFile, mode='w') as tar :
-                tar.add(self.args.workdir, arcname="/", filter=ignorelogs)
+                tar.add(self.args.workdir, arcname="/", filter=ignorelogslibs)
 
         try:
             # re-enable the server ability to write the map
@@ -298,7 +312,7 @@ class MinecraftServer:
 
             if self.args.auto_upload:
                 scpCmd = ["scp", "-o", "StrictHostKeyChecking=no", os.path.join(self.args.backup_dir, backupFile), self.args.ssh_remote_url]
-                logging.info("uploading world: %s", scpCmd)
+                self.logger.info("uploading world: %s", scpCmd)
                 res.append(subprocess.check_output(scpCmd).decode("utf-8"))
 
             return ({ "log": res, "file" : backupFile }, code)
@@ -323,7 +337,7 @@ class MinecraftServer:
                     os.remove(f.path)
                     res.append(f"removed {f.path}")
         except:
-            logging.exception("unexpected error", stack_info=True)
+            self.logger.exception("unexpected error", stack_info=True)
             code = 500
         return ({ "log": res}, code)
 

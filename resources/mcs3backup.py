@@ -51,7 +51,7 @@ class LocalFile:
 class MinecraftS3BackupManager:
 
     def __init__(self, localDirectory: Path, bucketName: str, client) -> None:
-        self.logger = logging.getLogger("MinecraftS3BackupManager")
+        self.logger = logging.getLogger("mc.MinecraftS3BackupManager")
         self.localDirectory = localDirectory
         self.bucketName = bucketName
         self.client = client
@@ -68,10 +68,13 @@ class MinecraftS3BackupManager:
         objects = self.client.list_objects_v2(Bucket=self.bucketName)
 
         remote_objects=dict[str, StoredObject]()
-        for obj in objects['Contents']:
-            so = StoredObject(obj)
-            remote_objects[so.objectName()] = so
-            self.logger.debug("fetched remote object %s digest %s", so.objectName(), so.fileDigest())
+        if "Contents" in  objects:
+            for obj in objects['Contents']:
+                so = StoredObject(obj)
+                remote_objects[so.objectName()] = so
+                self.logger.debug("fetched remote object %s digest %s", so.objectName(), so.fileDigest())
+        else:
+            self.logger.debug("fetched bucket is empty")
 
         self.remoteObjects = remote_objects
 
@@ -124,7 +127,7 @@ class MinecraftS3BackupManager:
             hash = v.fileDigest()
             if k in self.remoteObjects:
                 object = self.remoteObjects[k]
-                self.logger.info("Compare %s local %s remote %s", k, v.fileDigest(), object.fileDigest())
+                self.logger.debug("Compare %s local %s remote %s", k, v.fileDigest(), object.fileDigest())
                 if hash == object.fileDigest():
                     changed.pop(k)
                 else:
